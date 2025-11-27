@@ -35,6 +35,14 @@ export class ApiService {
     );
   }
 
+  getSubjectTeacherDashboard(teacherId: number, classId?: number): Observable<any> {
+    let url = `${this.baseUrl}/classes/subject_teacher_dashboard/?teacher_id=${teacherId}`;
+    if (classId) {
+      url += `&class_id=${classId}`;
+    }
+    return this.http.get(url, this.getHttpOptions());
+  }
+
   // ========== Authentication ==========
   login(credentials: any): Observable<any> {
     return this.http.post(`${this.baseUrl}/auth/login`, credentials, this.getHttpOptions());

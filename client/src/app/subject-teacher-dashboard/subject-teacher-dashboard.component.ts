@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { ApiService } from '../services/api.service';
 
 @Component({
   selector: 'app-subject-teacher-dashboard',
@@ -10,9 +11,126 @@ import { Router } from '@angular/router';
   templateUrl: './subject-teacher-dashboard.component.html',
   styleUrls: ['./subject-teacher-dashboard.component.css']
 })
-export class SubjectTeacherDashboardComponent {
+export class SubjectTeacherDashboardComponent implements OnInit {
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private apiService: ApiService
+  ) { }
+
+  isLoading = false;
+  errorMessage = '';
+  teacherId: number | null = null;
+
+  /* Teacher Info */
+  teacherName = '';
+  subjectName = '';
+  teacherProfile: any = {};
+
+  /* Class Switching */
+  classList: any[] = [];
+  currentClass: any = null;
+  currentClassId: number | null = null;
+
+  /* KPI */
+  totalStudents = 0;
+  pendingAssignments = 0;
+  averageMarks = 0;
+
+  /* Exam Dropdown */
+  examTypes = ['Unit Test 1', 'Unit Test 2', 'Mid Term', 'Unit Test 3', 'Final Exam'];
+  selectedExam = 'Unit Test 1';
+  isDropdownOpen = false;
+
+  /* Students Marks */
+  students: any[] = [];
+
+  /* Assignments */
+  newAssignment: any = { title: '', dueDate: '', description: '' };
+  assignments: any[] = [];
+
+  /* Resources */
+  newResource: any = { title: '', link: '' };
+  resources: any[] = [];
+
+  ngOnInit() {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      this.teacherId = user.id;
+      this.teacherName = user.name;
+      this.loadDashboardData();
+    } else {
+      this.router.navigate(['/login']);
+    }
+  }
+
+  loadDashboardData(classId?: number) {
+    if (!this.teacherId) return;
+
+    this.isLoading = true;
+    this.errorMessage = '';
+
+    this.apiService.getSubjectTeacherDashboard(this.teacherId, classId).subscribe({
+      next: (data) => {
+        this.teacherProfile = data.teacher;
+        this.teacherName = data.teacher.name;
+        this.classList = data.classes;
+
+        if (data.current_class) {
+          this.currentClass = data.current_class;
+          this.currentClassId = data.current_class.id;
+          this.subjectName = data.current_class.subject;
+
+          // Map students and merge with marks
+          this.processStudentsAndMarks(data.students, data.marks);
+        } else {
+          this.currentClass = null;
+          this.students = [];
+        }
+
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('Error loading dashboard:', err);
+        this.errorMessage = 'Failed to load dashboard data. Please try again.';
+        this.isLoading = false;
+      }
+    });
+  }
+
+  processStudentsAndMarks(students: any[], marks: any[]) {
+    this.students = students.map(student => {
+      // Find marks for this student and current exam
+      const studentMark = marks.find(m =>
+        m.student === student.id &&
+        m.exam_type === this.selectedExam
+      );
+
+      return {
+        id: student.id,
+        rollNo: student.id, // Using ID as roll no for now
+        name: student.name,
+        email: student.email,
+        examMarks: studentMark ? studentMark.marks_obtained : null,
+        markId: studentMark ? studentMark.id : null,
+        assignmentMarks: 0 // Placeholder as we don't have assignment marks in DB yet
+      };
+    });
+
+    this.totalStudents = this.students.length;
+
+    // Calculate average
+    const marksList = this.students
+      .filter(s => s.examMarks !== null)
+      .map(s => s.examMarks);
+
+    if (marksList.length > 0) {
+      this.averageMarks = Math.round(marksList.reduce((a, b) => a + b, 0) / marksList.length);
+    } else {
+      this.averageMarks = 0;
+    }
+  }
 
   /* ✅ Top Right Logout */
   logout() {
@@ -26,52 +144,64 @@ export class SubjectTeacherDashboardComponent {
   setView(view: string) { this.currentView = view; }
 
   /* ✅ Class Switching */
-  classList = ['9A', '9B', '9C', '10A', '10B'];
-  currentClass = '9B';
-
-  switchClass(cls: string) {
-    this.currentClass = cls;
-    // later you can add API call here to fetch class data
+  switchClass(classId: any) {
+    // Handle both object (from ngValue) and string/number (from value)
+    const id = typeof classId === 'object' ? classId.id : classId;
+    this.loadDashboardData(id);
   }
 
-  /* Teacher Info */
-  teacherName = 'Ms. Reshmi';
-  subjectName = 'Mathematics';
-
-  /* KPI */
-  totalStudents = 40;
-  pendingAssignments = 3;
-  averageMarks = 82;
-
-  /* Exam Dropdown */
-  examTypes = ['Class Test', 'Mid Term', 'Onam Exam', 'Final Exam'];
-  selectedExam = 'Class Test';
-  isDropdownOpen = false;
-
   toggleDropdown() { this.isDropdownOpen = !this.isDropdownOpen; }
+
   selectExam(exam: string) {
     this.selectedExam = exam;
     this.isDropdownOpen = false;
+    // Reload data to refresh marks for selected exam
+    if (this.currentClassId) {
+      this.loadDashboardData(this.currentClassId);
+    }
   }
-
-  /* Students Marks */
-  students = [
-    { rollNo: 1, name: 'Aarav', assignmentMarks: 18, examMarks: 85 },
-    { rollNo: 2, name: 'Diya', assignmentMarks: 20, examMarks: 78 },
-    { rollNo: 3, name: 'Rahul', assignmentMarks: 17, examMarks: 91 }
-  ];
 
   updateMarks(student: any) {
-    alert(`✅ Marks updated for ${student.name}`);
+    if (student.examMarks === null || student.examMarks === undefined) return;
+
+    const marksData = {
+      student: student.id,
+      teacher: this.teacherId,
+      subject: this.subjectName,
+      class_name: this.currentClass.class_number,
+      division: this.currentClass.division,
+      exam_type: this.selectedExam,
+      marks_obtained: student.examMarks,
+      total_marks: 100
+    };
+
+    if (student.markId) {
+      // Update existing mark
+      this.apiService.updateMarks(student.markId, marksData).subscribe({
+        next: (res) => {
+          alert(`✅ Marks updated for ${student.name}`);
+        },
+        error: (err) => {
+          console.error('Error updating marks:', err);
+          alert('❌ Failed to update marks');
+        }
+      });
+    } else {
+      // Create new mark
+      this.apiService.createMarks(marksData).subscribe({
+        next: (res) => {
+          student.markId = res.id; // Save the new mark ID
+          alert(`✅ Marks saved for ${student.name}`);
+        },
+        error: (err) => {
+          console.error('Error saving marks:', err);
+          alert('❌ Failed to save marks');
+        }
+      });
+    }
   }
 
-  /* Assignments */
-  newAssignment: any = { title: '', dueDate: '', description: '' };
-  assignments: any[] = [
-    { title: 'Worksheet 1', dueDate: '2025-10-25', description: 'Algebra practice', status: 'Pending' },
-    { title: 'Chapter Test', dueDate: '2025-11-05', description: 'Polynomials', status: 'Assigned' }
-  ];
-
+  /* Assignments - Placeholder for now as backend doesn't have Assignment model fully integrated yet */
   addAssignment() {
     if (!this.newAssignment.title) return;
     this.assignments.push({ ...this.newAssignment, status: 'Pending' });
@@ -86,13 +216,7 @@ export class SubjectTeacherDashboardComponent {
     this.assignments = this.assignments.filter(x => x !== a);
   }
 
-  /* Resources */
-  newResource: any = { title: '', link: '' };
-  resources = [
-    { title: 'Chapter Notes', link: 'https://example.com/notes' },
-    { title: 'Video Lesson', link: 'https://youtu.be/sample' }
-  ];
-
+  /* Resources - Placeholder */
   addResource() {
     if (!this.newResource.title || !this.newResource.link) return;
     this.resources.push({ ...this.newResource });

@@ -209,6 +209,94 @@ class ClassViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'detail': 'Teacher not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    @action(detail=False, methods=['get'])
+    def subject_teacher_dashboard(self, request):
+        """Get dashboard data for subject teacher"""
+        teacher_id = request.query_params.get('teacher_id')
+        class_id = request.query_params.get('class_id')
+        
+        if not teacher_id:
+            return Response({'detail': 'teacher_id parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            teacher = User.objects.get(id=teacher_id)
+            
+            # Find all subjects taught by this teacher
+            taught_subjects = Subject.objects.filter(class_teacher_id=teacher_id)
+            
+            if not taught_subjects.exists():
+                return Response({
+                    'teacher': UserSerializer(teacher).data,
+                    'classes': [],
+                    'students': [],
+                    'marks': [],
+                    'message': 'No subjects assigned to this teacher'
+                }, status=status.HTTP_200_OK)
+
+            # Get unique classes from subjects
+            class_names = taught_subjects.values_list('class_name', flat=True).distinct()
+            classes_data = []
+            
+            for c_name in class_names:
+                # Parse "9A" -> 9, "A"
+                import re
+                match = re.match(r"(\d+)([A-Z]+)", c_name)
+                if match:
+                    c_num = int(match.group(1))
+                    c_div = match.group(2)
+                    try:
+                        cls = Class.objects.get(class_number=c_num, division=c_div)
+                        classes_data.append({
+                            'id': cls.id,
+                            'name': c_name,
+                            'class_number': cls.class_number,
+                            'division': cls.division,
+                            'subject': taught_subjects.filter(class_name=c_name).first().name
+                        })
+                    except Class.DoesNotExist:
+                        continue
+
+            # If class_id provided, filter for that class, else use first class
+            selected_class = None
+            if class_id:
+                selected_class = next((c for c in classes_data if str(c['id']) == str(class_id)), None)
+            
+            if not selected_class and classes_data:
+                selected_class = classes_data[0]
+            
+            students_data = []
+            marks_data = []
+            
+            if selected_class:
+                # Get students for selected class
+                students = User.objects.filter(
+                    className=selected_class['class_number'],
+                    division=selected_class['division'],
+                    role='student'
+                )
+                students_data = UserSerializer(students, many=True).data
+                
+                # Get marks for these students for the teacher's subject
+                marks = Marks.objects.filter(
+                    class_name=selected_class['class_number'],
+                    division=selected_class['division'],
+                    subject=selected_class['subject']
+                )
+                marks_data = MarksSerializer(marks, many=True).data
+
+            return Response({
+                'teacher': UserSerializer(teacher).data,
+                'classes': classes_data,
+                'current_class': selected_class,
+                'students': students_data,
+                'marks': marks_data,
+            }, status=status.HTTP_200_OK)
+            
+        except User.DoesNotExist:
+            return Response({'detail': 'Teacher not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 # Attendance ViewSet
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.all()

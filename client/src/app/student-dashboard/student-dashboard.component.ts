@@ -21,8 +21,8 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   allHomeworks: any[] = [];
   allMarks: any[] = [];
   allExams: any[] = [];
-  subjects: string[] = ['All'];
-  selectedSubject: string = 'All';
+  examTypes: string[] = ['All', 'Unit Test 1', 'Unit Test 2', 'Mid Term', 'Unit Test 3', 'Final Exam'];
+  selectedExam: string = 'All';
   displayedHomeworks: any[] = [];
   displayedMarks: any[] = [];
   displayedExams: any[] = [];
@@ -47,7 +47,7 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   private destroy$ = new Subject<void>();
   private refreshInterval = 10000; // ✅ REAL-TIME: Refresh every 10 seconds
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService) { }
 
   ngOnInit() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -66,15 +66,14 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       error: (err) => console.error('❌ Profile API Error:', err),
     });
 
-    this.api.getStudentSubjects(user.id).subscribe({
-      next: (subjects: any) =>
-        (this.subjects = ['All', ...(Array.isArray(subjects) ? subjects : [])]),
-      error: () => (this.subjects = ['All']),
-    });
+
+
+    // Load marks
+    this.loadMarks(user.id);
 
     // Load leave requests with real-time polling
     this.loadLeaveHistory(user.id);
-    
+
     this.loadStudentEvents(user.id);
 
     // Default mock data
@@ -102,12 +101,12 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       { subject: 'English', title: 'To Kill a Mockingbird Quiz', dueDate: '2025-11-12' }
     ];
 
-    this.allMarks = [
-      { subject: 'Math', score: 88 },
-      { subject: 'Science', score: 92 },
-      { subject: 'History', score: 78 },
-      { subject: 'English', score: 85 }
-    ];
+    // this.allMarks = [
+    //   { subject: 'Math', score: 88 },
+    //   { subject: 'Science', score: 92 },
+    //   { subject: 'History', score: 78 },
+    //   { subject: 'English', score: 85 }
+    // ];
 
     this.filterDashboard();
     this.calculateAverageGrade();
@@ -116,10 +115,32 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     interval(this.refreshInterval)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        console.log('🔄 Real-time sync: Refreshing leave requests and events...');
+        console.log('🔄 Real-time sync: Refreshing data...');
         this.loadLeaveHistory(user.id);
         this.loadStudentEvents(user.id);
+        this.loadMarks(user.id);
       });
+  }
+
+  loadMarks(studentId: number) {
+    this.api.getMarksByStudent(studentId).subscribe({
+      next: (res: any) => {
+        // Handle paginated response or array
+        const marks = Array.isArray(res) ? res : (res.results || []);
+
+        this.allMarks = marks.map((m: any) => ({
+          subject: m.subject,
+          score: m.marks_obtained,
+          examType: m.exam_type,
+          total: m.total_marks,
+          percentage: m.percentage
+        }));
+
+        console.log('✅ Marks loaded:', this.allMarks);
+        this.filterDashboard();
+      },
+      error: (err) => console.error('❌ Marks load error:', err)
+    });
   }
 
   loadLeaveHistory(studentId: number) {
@@ -164,10 +185,18 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   filterDashboard() {
-    this.displayedHomeworks = this.selectedSubject === 'All' ? this.allHomeworks : this.allHomeworks.filter((h) => h.subject === this.selectedSubject);
-    this.displayedMarks = this.selectedSubject === 'All' ? this.allMarks : this.allMarks.filter((m) => m.subject === this.selectedSubject);
+    this.displayedHomeworks = this.allHomeworks;
+
+    // Filter marks by Exam Type only
+    this.displayedMarks = this.allMarks.filter((m) => {
+      const examMatch = this.selectedExam === 'All' || m.examType === this.selectedExam;
+      return examMatch;
+    });
+
     this.displayedExams = [...this.allExams];
-    this.displayedTeacherContact = this.selectedSubject === 'All' ? this.classAdvisor : this.subjectTeachers.find((t) => t.subject === this.selectedSubject) || this.classAdvisor;
+    // Always show Class Advisor since subject filter is removed
+    this.displayedTeacherContact = this.classAdvisor;
+
     this.calculateAverageGrade();
     if (this.gradesChart) this.createGradesChart(this.displayedMarks);
   }
