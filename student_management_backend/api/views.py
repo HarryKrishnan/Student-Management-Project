@@ -508,9 +508,19 @@ class SubjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Subject.objects.all()
         class_name = self.request.query_params.get('className')
+        class_id = self.request.query_params.get('class_id')
         
         if class_name:
             queryset = queryset.filter(class_name=class_name)
+        
+        # Filter by class_id - need to construct class_name from Class model
+        if class_id:
+            try:
+                class_obj = Class.objects.get(id=class_id)
+                constructed_class_name = f"{class_obj.class_number}{class_obj.division}"
+                queryset = queryset.filter(class_name=constructed_class_name)
+            except Class.DoesNotExist:
+                queryset = queryset.none()
         
         return queryset
 

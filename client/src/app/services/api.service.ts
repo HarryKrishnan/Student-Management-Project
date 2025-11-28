@@ -9,7 +9,7 @@ import { map } from 'rxjs/operators';
 export class ApiService {
   private baseUrl = 'http://localhost:8000/api'; // Django backend URL
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   // HTTP Options
   private getHttpOptions() {
@@ -108,6 +108,8 @@ export class ApiService {
   getAllClasses(): Observable<any> {
     return this.http.get(`${this.baseUrl}/classes/`, this.getHttpOptions());
   }
+
+
 
   getClassById(id: number): Observable<any> {
     return this.http.get(`${this.baseUrl}/classes/${id}/`, this.getHttpOptions());
@@ -255,8 +257,9 @@ export class ApiService {
     return this.http.delete(`${this.baseUrl}/subjects/${id}/`, this.getHttpOptions());
   }
 
-  getSubjectsByClass(className: string): Observable<any> {
-    return this.http.get(`${this.baseUrl}/subjects/?className=${className}`, this.getHttpOptions());
+  getSubjectsByClass(classIdentifier: string | number): Observable<any> {
+    const param = typeof classIdentifier === 'number' ? `class_id=${classIdentifier}` : `className=${classIdentifier}`;
+    return this.http.get(`${this.baseUrl}/subjects/?${param}`, this.getHttpOptions());
   }
 
   getStudentSubjects(studentId: number): Observable<any> {

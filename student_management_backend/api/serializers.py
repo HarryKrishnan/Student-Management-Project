@@ -62,9 +62,11 @@ class LeaveSerializer(serializers.ModelSerializer):
 #         read_only_fields = ['id', 'student', 'created_at', 'updated_at', 'student_name']
 
 class SubjectSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source='class_teacher.name', read_only=True, allow_null=True)
+    
     class Meta:
         model = Subject
-        fields = '__all__'
+        fields = ['id', 'name', 'class_name', 'class_teacher', 'teacher_name']
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:

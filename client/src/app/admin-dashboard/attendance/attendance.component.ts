@@ -3,16 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 
-type AttendanceRow = {
-  id: number;
-  date: string;               // ISO date string
-  status: 'Present' | 'Absent';
-  className: string;
-  division: string;
-  student?: { id: number; name: string; className?: string; division?: string };
-  teacher?: { id: number; name: string };
-};
-
 @Component({
   selector: 'app-attendance',
   standalone: true,
@@ -22,279 +12,199 @@ type AttendanceRow = {
 })
 export class AttendanceComponent implements OnInit {
 
-  attendance: AttendanceRow[] = [];
-
-  search = '';
-  classFilter = 'all';
-  divisionFilter = 'all';
-  statusFilter = 'all';
-  dateFrom = '';
-  dateTo = '';
-
-  classes: string[] = [];
-  divisions: string[] = ['A', 'B', 'C', 'D', 'E'];
-
-  loading = false;
-  error: string | null = null;
-
-  // Add/Edit modal
-  showModal = false;
-  editMode = false;
-  currentRecord: any = null;
-
-  // Form for adding/editing
-  attendanceForm = {
-    studentId: null as number | null,
-    date: '',
-    status: 'Present' as 'Present' | 'Absent',
-    className: '',
-    division: ''
-  };
-
-  students: any[] = [];
   allClasses: any[] = [];
+  selectedClassId: number | null = null;
+  selectedDate: string = new Date().toISOString().split('T')[0];
+
+  classStudents: any[] = [];
+  attendanceMap: { [studentId: number]: 'Present' | 'Absent' } = {};
+  existingAttendance: any[] = [];
+
+  // History
+  attendanceHistory: any[] = [];
+  historyDateFrom: string = '';
+  historyDateTo: string = '';
 
   constructor(private api: ApiService) { }
 
   ngOnInit(): void {
-    this.fetchAttendance();
-    this.loadStudents();
     this.loadClasses();
-  }
-
-  fetchAttendance() {
-    this.loading = true;
-    this.error = null;
-
-    this.api.getAllAttendance().subscribe({
-      next: (res) => {
-        console.log("✅ Attendance API:", res);
-
-        // ✅ Handle both response formats (including paginated)
-        if (res.attendance) {
-          this.attendance = res.attendance;
-        } else if (res.data) {
-          this.attendance = res.data;
-        } else if (res.results) {
-          // Django REST framework pagination format
-          this.attendance = res.results;
-        } else if (Array.isArray(res)) {
-          this.attendance = res;
-        } else {
-          this.attendance = [];
-        }
-
-        console.log('Attendance records loaded:', this.attendance.length);
-
-        // ✅ Build class dropdown list
-        const classSet = new Set<string>();
-        this.attendance.forEach(r => {
-          classSet.add(r.className || r.student?.className || '');
-        });
-
-        this.classes = Array.from(classSet).filter(c => c !== '').sort();
-      },
-      error: (err) => {
-        console.error('❌ Attendance fetch error', err);
-        this.error = err.error?.message || 'Failed to fetch attendance.';
-      },
-      complete: () => (this.loading = false),
-    });
-  }
-
-  loadStudents() {
-    this.api.getUsersByRole('student').subscribe({
-      next: (res: any) => {
-        if (res.users) {
-          this.students = res.users;
-        } else if (Array.isArray(res)) {
-          this.students = res;
-        }
-        console.log('Students loaded:', this.students.length);
-      },
-      error: (err) => console.error('Error loading students:', err)
-    });
   }
 
   loadClasses() {
     this.api.getAllClasses().subscribe({
       next: (res: any) => {
-        if (res.classes) {
-          this.allClasses = res.classes;
-        } else if (res.results) {
-          this.allClasses = res.results;
-        } else if (Array.isArray(res)) {
-          this.allClasses = res;
-        }
+        this.allClasses = Array.isArray(res) ? res : (res.results || res.classes || []);
         console.log('Classes loaded:', this.allClasses.length);
       },
       error: (err) => console.error('Error loading classes:', err)
     });
   }
 
-  // Open modal to add new attendance
-  openAddModal() {
-    this.editMode = false;
-    this.showModal = true;
-    this.attendanceForm = {
-      studentId: null,
-      date: new Date().toISOString().split('T')[0], // Today's date
-      status: 'Present',
-      className: '',
-      division: ''
-    };
-  }
-
-  // Open modal to edit existing attendance
-  openEditModal(record: any) {
-    this.editMode = true;
-    this.showModal = true;
-    this.currentRecord = record;
-
-    this.attendanceForm = {
-      studentId: record.student?.id || null,
-      date: record.date,
-      status: record.status,
-      className: record.className || record.class_name || '',
-      division: record.division || ''
-    };
-  }
-
-  closeModal() {
-    this.showModal = false;
-    this.currentRecord = null;
-  }
-
-  // Save attendance (add or edit)
-  saveAttendance() {
-    if (!this.attendanceForm.studentId || !this.attendanceForm.date || !this.attendanceForm.status) {
-      alert('Please fill in all required fields!');
-      return;
+  onClassChange() {
+    if (this.selectedClassId) {
+      this.loadStudentsForClass();
+      this.loadAttendanceForDate();
     }
+  }
 
-    const payload = {
-      student: this.attendanceForm.studentId,
-      date: this.attendanceForm.date,
-      status: this.attendanceForm.status,
-      class_name: this.attendanceForm.className,
-      division: this.attendanceForm.division,
-      teacher: 1, // TODO: Get current logged-in teacher ID
-      marked_by: 'Admin' // TODO: Get current user's name
-    };
+  loadStudentsForClass() {
+    if (!this.selectedClassId) return;
 
-    console.log('Saving attendance with payload:', payload);
-    console.log('Payload types:', {
-      student: typeof payload.student,
-      teacher: typeof payload.teacher,
-      date: typeof payload.date,
-      status: typeof payload.status
+    const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
+    if (!selectedClass) return;
+
+    const className = `${selectedClass.class_number || selectedClass.classNumber}`;
+    const division = selectedClass.division;
+
+    this.api.getUsersByClass(className, division).subscribe({
+      next: (res: any) => {
+        this.classStudents = Array.isArray(res) ? res : (res.results || res.users || []);
+        console.log('Students loaded:', this.classStudents.length);
+
+        // Initialize attendance map with default "Present"
+        this.attendanceMap = {};
+        this.classStudents.forEach(student => {
+          this.attendanceMap[student.id] = 'Present';
+        });
+      },
+      error: (err) => console.error('Error loading students:', err)
     });
-
-    if (this.editMode && this.currentRecord) {
-      // Update existing record
-      this.api.updateAttendance(this.currentRecord.id, payload).subscribe({
-        next: () => {
-          alert('✅ Attendance updated successfully');
-          this.closeModal();
-          this.fetchAttendance();
-        },
-        error: (err) => {
-          console.error('Error updating attendance:', err);
-          console.error('Backend error details:', err.error);
-          alert(JSON.stringify(err.error) || 'Error updating attendance');
-        }
-      });
-    } else {
-      // Create new record
-      this.api.markAttendance(payload).subscribe({
-        next: () => {
-          alert('✅ Attendance marked successfully');
-          this.closeModal();
-          this.fetchAttendance();
-        },
-        error: (err) => {
-          console.error('Error creating attendance:', err);
-          console.error('Backend error details:', err.error);
-          alert(JSON.stringify(err.error) || 'Error marking attendance');
-        }
-      });
-    }
   }
 
-  // Delete attendance record
-  deleteAttendance(id: number) {
-    if (!confirm('Are you sure you want to delete this attendance record?')) {
+  loadAttendanceForDate() {
+    if (!this.selectedClassId || !this.selectedDate) return;
+
+    const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
+    if (!selectedClass) return;
+
+    const className = `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
+
+    // Load existing attendance for this class and date
+    this.api.getAllAttendance().subscribe({
+      next: (res: any) => {
+        const allAttendance = Array.isArray(res) ? res : (res.results || []);
+
+        // Filter for selected class and date
+        this.existingAttendance = allAttendance.filter((a: any) => {
+          const attendanceDate = a.date.split('T')[0]; // Get date part only
+          const attendanceClass = a.class_name || a.className;
+          return attendanceDate === this.selectedDate && attendanceClass === className;
+        });
+
+        console.log('Existing attendance loaded:', this.existingAttendance.length);
+
+        // Update attendance map with existing data
+        this.existingAttendance.forEach(record => {
+          if (record.student) {
+            this.attendanceMap[record.student] = record.status;
+          }
+        });
+      },
+      error: (err) => console.error('Error loading attendance:', err)
+    });
+  }
+
+  saveAllAttendance() {
+    if (!this.selectedClassId || !this.selectedDate) {
+      alert('Please select a class and date');
       return;
     }
 
-    this.api.deleteAttendance(id).subscribe({
+    const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
+    if (!selectedClass) return;
+
+    const className = `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
+
+    // Prepare bulk attendance data
+    const attendanceRecords = this.classStudents.map(student => ({
+      student: student.id,
+      date: this.selectedDate,
+      status: this.attendanceMap[student.id] || 'Present',
+      class_name: className,
+      division: selectedClass.division,
+      teacher: 1, // Admin user ID
+      marked_by: 'Admin'
+    }));
+
+    console.log('Saving attendance records:', attendanceRecords);
+
+    // Use bulk mark endpoint
+    this.api.markAttendance({ records: attendanceRecords }).subscribe({
       next: () => {
-        alert('✅ Attendance deleted successfully');
-        this.fetchAttendance();
+        alert('✅ Attendance saved successfully for all students!');
+        this.loadAttendanceForDate();
       },
       error: (err) => {
-        console.error('Error deleting attendance:', err);
-        alert(err.error?.message || 'Error deleting attendance');
+        console.error('Error saving attendance:', err);
+        alert('Error saving attendance. Check console for details.');
       }
     });
   }
 
-  clearFilters() {
-    this.search = '';
-    this.classFilter = 'all';
-    this.divisionFilter = 'all';
-    this.statusFilter = 'all';
-    this.dateFrom = '';
-    this.dateTo = '';
+  loadAttendanceHistory() {
+    if (!this.selectedClassId) {
+      alert('Please select a class first');
+      return;
+    }
+
+    const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
+    if (!selectedClass) return;
+
+    const className = `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
+
+    this.api.getAllAttendance().subscribe({
+      next: (res: any) => {
+        let allAttendance = Array.isArray(res) ? res : (res.results || []);
+
+        // Filter by class
+        allAttendance = allAttendance.filter((a: any) => {
+          const attendanceClass = a.class_name || a.className;
+          return attendanceClass === className;
+        });
+
+        // Filter by date range if provided
+        if (this.historyDateFrom) {
+          allAttendance = allAttendance.filter((a: any) => {
+            const attendanceDate = a.date.split('T')[0];
+            return attendanceDate >= this.historyDateFrom;
+          });
+        }
+
+        if (this.historyDateTo) {
+          allAttendance = allAttendance.filter((a: any) => {
+            const attendanceDate = a.date.split('T')[0];
+            return attendanceDate <= this.historyDateTo;
+          });
+        }
+
+        this.attendanceHistory = allAttendance;
+        console.log('Attendance history loaded:', this.attendanceHistory.length);
+      },
+      error: (err) => console.error('Error loading attendance history:', err)
+    });
   }
 
-  get filtered(): AttendanceRow[] {
-    let rows = [...this.attendance];
-
-    const norm = (s: any) => (s ?? '').toString().toLowerCase();
-
-    if (this.search.trim()) {
-      const q = norm(this.search);
-      rows = rows.filter(r => norm(r.student?.name).includes(q));
-    }
-
-    if (this.classFilter !== 'all') {
-      rows = rows.filter(r => (r.className || r.student?.className) === this.classFilter);
-    }
-
-    if (this.divisionFilter !== 'all') {
-      rows = rows.filter(r => (r.division || r.student?.division) === this.divisionFilter);
-    }
-
-    if (this.statusFilter !== 'all') {
-      rows = rows.filter(r => r.status === this.statusFilter);
-    }
-
-    if (this.dateFrom) {
-      const from = new Date(this.dateFrom);
-      rows = rows.filter(r => new Date(r.date) >= from);
-    }
-
-    if (this.dateTo) {
-      const to = new Date(this.dateTo);
-      to.setHours(23, 59, 59, 999);
-      rows = rows.filter(r => new Date(r.date) <= to);
-    }
-
-    rows.sort((a, b) => +new Date(b.date) - +new Date(a.date));
-
-    return rows;
+  getClassName(): string {
+    if (!this.selectedClassId) return '';
+    const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
+    if (!selectedClass) return '';
+    return `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
   }
 
-  get presentCount() {
-    return this.filtered.filter(r => r.status === 'Present').length;
+  getLastMarkedTime(studentId: number): string {
+    const record = this.existingAttendance.find(a => a.student === studentId);
+    if (record) {
+      return new Date(record.updated_at || record.created_at).toLocaleString();
+    }
+    return 'Not marked yet';
   }
 
-  get absentCount() {
-    return this.filtered.filter(r => r.status === 'Absent').length;
+  get historyPresentCount(): number {
+    return this.attendanceHistory.filter(a => a.status === 'Present').length;
   }
 
-  get totalCount() {
-    return this.filtered.length;
+  get historyAbsentCount(): number {
+    return this.attendanceHistory.filter(a => a.status === 'Absent').length;
   }
 }

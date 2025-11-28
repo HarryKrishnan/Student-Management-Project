@@ -181,7 +181,7 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   ngAfterViewInit() {
     this.createAttendanceChart();
-    this.createGradesChart(this.displayedMarks);
+    // Don't create grades chart here - it will be created after data loads in filterDashboard()
   }
 
   filterDashboard() {
@@ -198,7 +198,9 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     this.displayedTeacherContact = this.classAdvisor;
 
     this.calculateAverageGrade();
-    if (this.gradesChart) this.createGradesChart(this.displayedMarks);
+
+    // Always recreate chart with filtered data
+    this.createGradesChart(this.displayedMarks);
   }
 
   submitLeaveRequest() {
@@ -272,32 +274,85 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   createGradesChart(data: any[]) {
-    if (!data || data.length === 0) return;
+    console.log('📊 Creating grades chart with data:', data);
+
+    if (!data || data.length === 0) {
+      console.warn('⚠️ No data available for chart');
+      return;
+    }
+
     const ctx = document.getElementById('gradesBarChart') as HTMLCanvasElement;
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('❌ Chart canvas element not found');
+      return;
+    }
+
     if (this.gradesChart) this.gradesChart.destroy();
+
+    // Generate dynamic colors for each subject
+    const generateColor = (index: number) => {
+      const colors = [
+        'rgba(138, 99, 210, 0.7)',   // Purple
+        'rgba(104, 211, 177, 0.7)',  // Teal
+        'rgba(255, 179, 102, 0.7)',  // Orange
+        'rgba(130, 177, 255, 0.7)',  // Blue
+        'rgba(255, 107, 129, 0.7)',  // Pink
+        'rgba(255, 206, 84, 0.7)',   // Yellow
+        'rgba(75, 192, 192, 0.7)',   // Cyan
+        'rgba(153, 102, 255, 0.7)',  // Violet
+      ];
+      return colors[index % colors.length];
+    };
 
     this.gradesChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: data.map((m) => m.subject),
         datasets: [{
+          label: 'Marks Obtained',
           data: data.map((m) => m.score),
-          backgroundColor: [
-            'rgba(138, 99, 210, 0.7)',
-            'rgba(104, 211, 177, 0.7)',
-            'rgba(255, 179, 102, 0.7)',
-            'rgba(130, 177, 255, 0.7)',
-          ],
+          backgroundColor: data.map((_, index) => generateColor(index)),
+          borderColor: data.map((_, index) => generateColor(index).replace('0.7', '1')),
+          borderWidth: 2,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, max: 100 } },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const mark = data[context.dataIndex];
+                return `Score: ${mark.score}/${mark.total || 100} (${mark.percentage?.toFixed(1) || ((mark.score / (mark.total || 100)) * 100).toFixed(1)}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Marks'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Subjects'
+            }
+          }
+        },
       }
     });
+
+    console.log('✅ Chart created successfully');
   }
 
   ngOnDestroy() {
