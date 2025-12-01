@@ -21,8 +21,8 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   allHomeworks: any[] = [];
   allMarks: any[] = [];
   allExams: any[] = [];
-  subjects: string[] = ['All'];
-  selectedSubject: string = 'All';
+  examTypes: string[] = ['All', 'Unit Test 1', 'Unit Test 2', 'Mid Term', 'Unit Test 3', 'Final Exam'];
+  selectedExam: string = 'All';
   displayedHomeworks: any[] = [];
   displayedMarks: any[] = [];
   displayedExams: any[] = [];
@@ -47,7 +47,7 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   private destroy$ = new Subject<void>();
   private refreshInterval = 10000; // ✅ REAL-TIME: Refresh every 10 seconds
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService) { }
 
   ngOnInit() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -66,15 +66,14 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       error: (err) => console.error('❌ Profile API Error:', err),
     });
 
-    this.api.getStudentSubjects(user.id).subscribe({
-      next: (subjects: any) =>
-        (this.subjects = ['All', ...(Array.isArray(subjects) ? subjects : [])]),
-      error: () => (this.subjects = ['All']),
-    });
+
+
+    // Load marks
+    this.loadMarks(user.id);
 
     // Load leave requests with real-time polling
     this.loadLeaveHistory(user.id);
-    
+
     this.loadStudentEvents(user.id);
 
     // Default mock data
@@ -102,12 +101,12 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       { subject: 'English', title: 'To Kill a Mockingbird Quiz', dueDate: '2025-11-12' }
     ];
 
-    this.allMarks = [
-      { subject: 'Math', score: 88 },
-      { subject: 'Science', score: 92 },
-      { subject: 'History', score: 78 },
-      { subject: 'English', score: 85 }
-    ];
+    // this.allMarks = [
+    //   { subject: 'Math', score: 88 },
+    //   { subject: 'Science', score: 92 },
+    //   { subject: 'History', score: 78 },
+    //   { subject: 'English', score: 85 }
+    // ];
 
     this.filterDashboard();
     this.calculateAverageGrade();
@@ -116,10 +115,32 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     interval(this.refreshInterval)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        console.log('🔄 Real-time sync: Refreshing leave requests and events...');
+        console.log('🔄 Real-time sync: Refreshing data...');
         this.loadLeaveHistory(user.id);
         this.loadStudentEvents(user.id);
+        this.loadMarks(user.id);
       });
+  }
+
+  loadMarks(studentId: number) {
+    this.api.getMarksByStudent(studentId).subscribe({
+      next: (res: any) => {
+        // Handle paginated response or array
+        const marks = Array.isArray(res) ? res : (res.results || []);
+
+        this.allMarks = marks.map((m: any) => ({
+          subject: m.subject,
+          score: m.marks_obtained,
+          examType: m.exam_type,
+          total: m.total_marks,
+          percentage: m.percentage
+        }));
+
+        console.log('✅ Marks loaded:', this.allMarks);
+        this.filterDashboard();
+      },
+      error: (err) => console.error('❌ Marks load error:', err)
+    });
   }
 
   loadLeaveHistory(studentId: number) {
@@ -160,16 +181,26 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   ngAfterViewInit() {
     this.createAttendanceChart();
-    this.createGradesChart(this.displayedMarks);
+    // Don't create grades chart here - it will be created after data loads in filterDashboard()
   }
 
   filterDashboard() {
-    this.displayedHomeworks = this.selectedSubject === 'All' ? this.allHomeworks : this.allHomeworks.filter((h) => h.subject === this.selectedSubject);
-    this.displayedMarks = this.selectedSubject === 'All' ? this.allMarks : this.allMarks.filter((m) => m.subject === this.selectedSubject);
+    this.displayedHomeworks = this.allHomeworks;
+
+    // Filter marks by Exam Type only
+    this.displayedMarks = this.allMarks.filter((m) => {
+      const examMatch = this.selectedExam === 'All' || m.examType === this.selectedExam;
+      return examMatch;
+    });
+
     this.displayedExams = [...this.allExams];
-    this.displayedTeacherContact = this.selectedSubject === 'All' ? this.classAdvisor : this.subjectTeachers.find((t) => t.subject === this.selectedSubject) || this.classAdvisor;
+    // Always show Class Advisor since subject filter is removed
+    this.displayedTeacherContact = this.classAdvisor;
+
     this.calculateAverageGrade();
-    if (this.gradesChart) this.createGradesChart(this.displayedMarks);
+
+    // Always recreate chart with filtered data
+    this.createGradesChart(this.displayedMarks);
   }
 
   submitLeaveRequest() {
@@ -243,32 +274,85 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   createGradesChart(data: any[]) {
-    if (!data || data.length === 0) return;
+    console.log('📊 Creating grades chart with data:', data);
+
+    if (!data || data.length === 0) {
+      console.warn('⚠️ No data available for chart');
+      return;
+    }
+
     const ctx = document.getElementById('gradesBarChart') as HTMLCanvasElement;
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('❌ Chart canvas element not found');
+      return;
+    }
+
     if (this.gradesChart) this.gradesChart.destroy();
+
+    // Generate dynamic colors for each subject
+    const generateColor = (index: number) => {
+      const colors = [
+        'rgba(138, 99, 210, 0.7)',   // Purple
+        'rgba(104, 211, 177, 0.7)',  // Teal
+        'rgba(255, 179, 102, 0.7)',  // Orange
+        'rgba(130, 177, 255, 0.7)',  // Blue
+        'rgba(255, 107, 129, 0.7)',  // Pink
+        'rgba(255, 206, 84, 0.7)',   // Yellow
+        'rgba(75, 192, 192, 0.7)',   // Cyan
+        'rgba(153, 102, 255, 0.7)',  // Violet
+      ];
+      return colors[index % colors.length];
+    };
 
     this.gradesChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: data.map((m) => m.subject),
         datasets: [{
+          label: 'Marks Obtained',
           data: data.map((m) => m.score),
-          backgroundColor: [
-            'rgba(138, 99, 210, 0.7)',
-            'rgba(104, 211, 177, 0.7)',
-            'rgba(255, 179, 102, 0.7)',
-            'rgba(130, 177, 255, 0.7)',
-          ],
+          backgroundColor: data.map((_, index) => generateColor(index)),
+          borderColor: data.map((_, index) => generateColor(index).replace('0.7', '1')),
+          borderWidth: 2,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, max: 100 } },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const mark = data[context.dataIndex];
+                return `Score: ${mark.score}/${mark.total || 100} (${mark.percentage?.toFixed(1) || ((mark.score / (mark.total || 100)) * 100).toFixed(1)}%)`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Marks'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Subjects'
+            }
+          }
+        },
       }
     });
+
+    console.log('✅ Chart created successfully');
   }
 
   ngOnDestroy() {

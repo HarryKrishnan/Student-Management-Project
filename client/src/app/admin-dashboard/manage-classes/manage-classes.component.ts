@@ -27,6 +27,15 @@ export class ManageClassesComponent implements OnInit {
     subjectTeachers: {} as any
   };
 
+  // ✅ Edit Modal State
+  showEditModal = false;
+  selectedClass: any = null;
+  classSubjects: any[] = [];
+  newSubject = {
+    name: '',
+    teacher: null as number | null
+  };
+
   constructor(private api: ApiService) { }
 
   ngOnInit() {
@@ -195,5 +204,81 @@ export class ManageClassesComponent implements OnInit {
     }
     const teacher = this.teachers.find(t => t.id === teacherId);
     return teacher?.subject || '-';
+  }
+
+  // ✅ Edit Modal Methods
+  openEditModal(classItem: any) {
+    this.selectedClass = classItem;
+    this.showEditModal = true;
+    this.loadClassSubjects(classItem.id);
+  }
+
+  closeEditModal() {
+    this.showEditModal = false;
+    this.selectedClass = null;
+    this.classSubjects = [];
+    this.newSubject = {
+      name: '',
+      teacher: null
+    };
+  }
+
+  loadClassSubjects(classId: number) {
+    this.api.getSubjectsByClass(classId).subscribe({
+      next: (res: any) => {
+        this.classSubjects = Array.isArray(res) ? res : (res.results || []);
+        console.log('Class subjects loaded:', this.classSubjects);
+      },
+      error: (err) => console.error('❌ Error loading subjects:', err)
+    });
+  }
+
+  assignSubject() {
+    if (!this.newSubject.name || !this.newSubject.teacher) {
+      alert('⚠️ Please fill in subject name and select a teacher');
+      return;
+    }
+
+    // Build class_name from selected class
+    const className = `${this.selectedClass.class_number || this.selectedClass.classNumber}${this.selectedClass.division}`;
+
+    // Backend expects: name, class_name, class_teacher
+    const payload = {
+      name: this.newSubject.name,
+      class_name: className,
+      class_teacher: this.newSubject.teacher
+    };
+
+    console.log('Assigning subject with payload:', payload);
+
+    this.api.createSubject(payload).subscribe({
+      next: () => {
+        alert('✅ Subject assigned successfully');
+        this.newSubject = { name: '', teacher: null };
+        this.loadClassSubjects(this.selectedClass.id);
+      },
+      error: (err) => {
+        console.error('❌ Error assigning subject:', err);
+        const errorMsg = err.error?.message || err.error || 'Error assigning subject';
+        alert(errorMsg);
+      }
+    });
+  }
+
+  removeSubject(subjectId: number) {
+    if (!confirm('Are you sure you want to remove this subject?')) {
+      return;
+    }
+
+    this.api.deleteSubject(subjectId).subscribe({
+      next: () => {
+        alert('✅ Subject removed successfully');
+        this.loadClassSubjects(this.selectedClass.id);
+      },
+      error: (err) => {
+        console.error('❌ Error removing subject:', err);
+        alert('Error removing subject');
+      }
+    });
   }
 }

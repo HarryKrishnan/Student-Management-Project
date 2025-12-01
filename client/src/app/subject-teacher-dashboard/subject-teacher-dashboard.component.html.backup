@@ -2,63 +2,6 @@
 
   <!-- ✅ Top Right Logout -->
   <div class="top-nav">
-    <button class="logout-btn" (click)="logout()">
-      <span class="material-icons">logout</span>
-      Logout
-    </button>
-  </div>
-
-  <!-- ✅ Sidebar -->
-  <div class="teacher-sidebar">
-    
-    <div class="sidebar-header">
-      <h3>Subject Teacher</h3>
-
-      <!-- ✅ Manage Classes Dropdown under title -->
-      <label>Select Class:</label>
-      <select [ngModel]="currentClass" (ngModelChange)="switchClass($event)">
-        <option [ngValue]="null" disabled>Select Class</option>
-        <option *ngFor="let c of classList" [ngValue]="c">{{ c.name }}</option>
-      </select>
-    </div>
-    
-    <ul class="sidebar-nav">
-      <li>
-        <a (click)="setView('overview')" [class.active]="currentView === 'overview'">
-          📊 Dashboard Overview
-        </a>
-      </li>
-
-      <li>
-        <a (click)="setView('marks')" [class.active]="currentView === 'marks'">
-          📝 Exam Marks Entry
-        </a>
-      </li>
-
-      <li>
-        <a (click)="setView('assignments')" [class.active]="currentView === 'assignments'">
-          🧑‍🎓 Manage Assignments
-        </a>
-      </li>
-
-      <li>
-        <a (click)="setView('resources')" [class.active]="currentView === 'resources'">
-          📚 Upload Resources
-        </a>
-      </li>
-    </ul>
-
-    <div class="sidebar-footer">
-      <a (click)="setView('profile')" [class.active]="currentView === 'profile'" class="profile-link">
-        👤 My Profile
-      </a>
-    </div>
-
-  </div>
-
-  <!-- ✅ Content Area -->
-  <div class="teacher-content-area">
-
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-overlay">
       <div class="spinner"></div>
@@ -80,9 +23,18 @@
         </div>
 
         <div class="kpi-section" *ngIf="currentClass; else noClassSelected">
-          <div class="kpi-card"><h3>Total Students</h3><p>{{ totalStudents }}</p></div>
-          <div class="kpi-card"><h3>Pending Assignments</h3><p>{{ pendingAssignments }}</p></div>
-          <div class="kpi-card"><h3>Class Average</h3><p>{{ averageMarks }}%</p></div>
+          <div class="kpi-card">
+            <h3>Total Students</h3>
+            <p>{{ totalStudents }}</p>
+          </div>
+          <div class="kpi-card">
+            <h3>Pending Assignments</h3>
+            <p>{{ pendingAssignments }}</p>
+          </div>
+          <div class="kpi-card">
+            <h3>Class Average</h3>
+            <p>{{ averageMarks }}%</p>
+          </div>
         </div>
 
         <ng-template #noClassSelected>
@@ -102,7 +54,8 @@
         <div class="profile-row"><strong>Subject:</strong> {{ subjectName }}</div>
 
         <div *ngIf="teacherProfile.className">
-          <div class="profile-row"><strong>Class Teacher of:</strong> {{ teacherProfile.className }}{{ teacherProfile.division }}</div>
+          <div class="profile-row"><strong>Class Teacher of:</strong> {{ teacherProfile.className }}{{
+            teacherProfile.division }}</div>
         </div>
       </div>
 
@@ -122,9 +75,7 @@
               </div>
 
               <ul class="exam-options" *ngIf="isDropdownOpen">
-                <li *ngFor="let exam of examTypes"
-                    [class.active]="exam === selectedExam"
-                    (click)="selectExam(exam)">
+                <li *ngFor="let exam of examTypes" [class.active]="exam === selectedExam" (click)="selectExam(exam)">
                   {{ exam }}
                 </li>
               </ul>
@@ -148,7 +99,8 @@
                   <td>{{ s.name }}</td>
 
                   <td>
-                    <input type="number" class="marks-input" [(ngModel)]="s.examMarks" min="0" max="100" placeholder="Enter marks">
+                    <input type="number" class="marks-input" [(ngModel)]="s.examMarks" min="0" max="100"
+                      placeholder="Enter marks">
                   </td>
 
                   <td>
@@ -177,13 +129,14 @@
       <!-- ✅ Assignments -->
       <div *ngIf="currentView === 'assignments'">
         <div class="event-management-panel">
-          
+
           <h2>Assignments <span *ngIf="currentClass">({{ currentClass.name }})</span></h2>
 
           <div *ngIf="currentClass; else selectClassAssign">
             <div class="attendance-controls">
               <input type="text" [(ngModel)]="newAssignment.title" placeholder="Assignment Title">
               <input type="date" [(ngModel)]="newAssignment.dueDate">
+              <input type="url" [(ngModel)]="newAssignment.link" placeholder="Resource Link (optional)">
               <input type="text" [(ngModel)]="newAssignment.description" placeholder="Description...">
               <button (click)="addAssignment()">Add Assignment</button>
             </div>
@@ -198,6 +151,7 @@
                 <tr>
                   <th>Title</th>
                   <th>Due Date</th>
+                  <th>Link</th>
                   <th>Description</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -208,6 +162,12 @@
                 <tr *ngFor="let a of assignments">
                   <td>{{ a.title }}</td>
                   <td>{{ a.dueDate | date }}</td>
+                  <td>
+                    <a *ngIf="a.link" [href]="a.link" target="_blank" class="resource-link">
+                      🔗 Open Link
+                    </a>
+                    <span *ngIf="!a.link" class="no-link">No link</span>
+                  </td>
                   <td>{{ a.description }}</td>
                   <td>{{ a.status }}</td>
 
@@ -249,7 +209,10 @@
 
             <table class="leave-table" *ngIf="resources.length > 0">
               <thead>
-                <tr><th>Title</th><th>Link</th></tr>
+                <tr>
+                  <th>Title</th>
+                  <th>Link</th>
+                </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let r of resources">

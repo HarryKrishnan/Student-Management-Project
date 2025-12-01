@@ -69,9 +69,9 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'student_management',
+        'NAME': 'student_management_db',
         'USER': 'root',
-        'PASSWORD': 'Mahin#982002',
+        'PASSWORD': 'harimysql',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }

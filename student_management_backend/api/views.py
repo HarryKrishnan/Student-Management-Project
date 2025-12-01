@@ -59,13 +59,62 @@ def register_view(request):
             role=serializer.validated_data['role'],
             className=serializer.validated_data.get('className'),
             division=serializer.validated_data.get('division'),
-            subject=serializer.validated_data.get('subject')
+            subject=serializer.validated_data.get('subject'),
+            phone=serializer.validated_data.get('phone')
         )
         return Response({
             'message': 'User created successfully',
             'user': UserSerializer(user).data
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_dashboard_stats(request):
+    """Get stats for admin dashboard"""
+    try:
+        student_count = User.objects.filter(role='student').count()
+        teacher_count = User.objects.filter(role='teacher').count()
+        class_count = Class.objects.count()
+        
+        # Calculate attendance percentage for today
+        from datetime import date
+        today = date.today()
+        total_attendance = Attendance.objects.filter(date=today).count()
+        present_count = Attendance.objects.filter(date=today, status='Present').count()
+        
+        attendance_percentage = 0
+        if total_attendance > 0:
+            attendance_percentage = (present_count / total_attendance) * 100
+            
+        # Recent activity
+        recent_leaves = Leave.objects.all().order_by('-created_at')[:3]
+        recent_events = Event.objects.all().order_by('-created_at')[:2]
+        
+        activity = []
+        for leave in recent_leaves:
+            activity.append({
+                'text': f"Leave request from {leave.student.name}",
+                'time': leave.created_at.strftime("%d %b, %H:%M")
+            })
+            
+        for event in recent_events:
+            activity.append({
+                'text': f"New event: {event.title}",
+                'time': event.created_at.strftime("%d %b, %H:%M")
+            })
+            
+        return Response({
+            'stats': {
+                'students': student_count,
+                'teachers': teacher_count,
+                'classes': class_count,
+                'attendanceToday': f"{int(attendance_percentage)}%"
+            },
+            'recentActivity': activity
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # User ViewSet
 class UserViewSet(viewsets.ModelViewSet):
@@ -108,7 +157,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 role=serializer.validated_data['role'],
                 className=serializer.validated_data.get('className'),
                 division=serializer.validated_data.get('division'),
-                subject=serializer.validated_data.get('subject')
+                subject=serializer.validated_data.get('subject'),
+                phone=serializer.validated_data.get('phone')
             )
             return Response({
                 'message': 'User created successfully',
@@ -208,6 +258,94 @@ class ClassViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No class found for this teacher'}, status=status.HTTP_404_NOT_FOUND)
         except User.DoesNotExist:
             return Response({'detail': 'Teacher not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def subject_teacher_dashboard(self, request):
+        """Get dashboard data for subject teacher"""
+        teacher_id = request.query_params.get('teacher_id')
+        class_id = request.query_params.get('class_id')
+        
+        if not teacher_id:
+            return Response({'detail': 'teacher_id parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            teacher = User.objects.get(id=teacher_id)
+            
+            # Find all subjects taught by this teacher
+            taught_subjects = Subject.objects.filter(class_teacher_id=teacher_id)
+            
+            if not taught_subjects.exists():
+                return Response({
+                    'teacher': UserSerializer(teacher).data,
+                    'classes': [],
+                    'students': [],
+                    'marks': [],
+                    'message': 'No subjects assigned to this teacher'
+                }, status=status.HTTP_200_OK)
+
+            # Get unique classes from subjects
+            class_names = taught_subjects.values_list('class_name', flat=True).distinct()
+            classes_data = []
+            
+            for c_name in class_names:
+                # Parse "9A" -> 9, "A"
+                import re
+                match = re.match(r"(\d+)([A-Z]+)", c_name)
+                if match:
+                    c_num = int(match.group(1))
+                    c_div = match.group(2)
+                    try:
+                        cls = Class.objects.get(class_number=c_num, division=c_div)
+                        classes_data.append({
+                            'id': cls.id,
+                            'name': c_name,
+                            'class_number': cls.class_number,
+                            'division': cls.division,
+                            'subject': taught_subjects.filter(class_name=c_name).first().name
+                        })
+                    except Class.DoesNotExist:
+                        continue
+
+            # If class_id provided, filter for that class, else use first class
+            selected_class = None
+            if class_id:
+                selected_class = next((c for c in classes_data if str(c['id']) == str(class_id)), None)
+            
+            if not selected_class and classes_data:
+                selected_class = classes_data[0]
+            
+            students_data = []
+            marks_data = []
+            
+            if selected_class:
+                # Get students for selected class
+                students = User.objects.filter(
+                    className=selected_class['class_number'],
+                    division=selected_class['division'],
+                    role='student'
+                )
+                students_data = UserSerializer(students, many=True).data
+                
+                # Get marks for these students for the teacher's subject
+                marks = Marks.objects.filter(
+                    class_name=selected_class['class_number'],
+                    division=selected_class['division'],
+                    subject=selected_class['subject']
+                )
+                marks_data = MarksSerializer(marks, many=True).data
+
+            return Response({
+                'teacher': UserSerializer(teacher).data,
+                'classes': classes_data,
+                'current_class': selected_class,
+                'students': students_data,
+                'marks': marks_data,
+            }, status=status.HTTP_200_OK)
+            
+        except User.DoesNotExist:
+            return Response({'detail': 'Teacher not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Attendance ViewSet
 class AttendanceViewSet(viewsets.ModelViewSet):
@@ -420,9 +558,19 @@ class SubjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Subject.objects.all()
         class_name = self.request.query_params.get('className')
+        class_id = self.request.query_params.get('class_id')
         
         if class_name:
             queryset = queryset.filter(class_name=class_name)
+        
+        # Filter by class_id - need to construct class_name from Class model
+        if class_id:
+            try:
+                class_obj = Class.objects.get(id=class_id)
+                constructed_class_name = f"{class_obj.class_number}{class_obj.division}"
+                queryset = queryset.filter(class_name=constructed_class_name)
+            except Class.DoesNotExist:
+                queryset = queryset.none()
         
         return queryset
 
