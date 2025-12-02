@@ -55,11 +55,15 @@
         </div>
         <div class="kpi-card">
           <h3>Present Today</h3>
-          <p>{{ presentToday }}</p>
+          <p>{{ currentPresentCount }}</p>
+          <small *ngIf="attendanceDateForDisplay" style="font-size: 0.8em; color: #888;">Last saved: {{
+            attendanceDateForDisplay }}</small>
         </div>
         <div class="kpi-card">
           <h3>Absent Today</h3>
-          <p>{{ absentToday }}</p>
+          <p>{{ currentAbsentCount }}</p>
+          <small *ngIf="attendanceDateForDisplay" style="font-size: 0.8em; color: #888;">Last saved: {{
+            attendanceDateForDisplay }}</small>
         </div>
         <div class="kpi-card">
           <h3>Pending Leaves</h3>
@@ -77,10 +81,19 @@
       <h2>Attendance Management</h2>
 
       <div class="attendance-controls">
-        <input type="date" [(ngModel)]="selectedDate" />
-        <button (click)="markAllPresent()" class="mark-btn-success">Mark All Present</button>
-        <button (click)="markAllAbsent()" class="mark-btn-danger">Mark All Absent</button>
-        <button (click)="saveAttendance()" class="save-btn">Save Attendance</button>
+        <input type="date" [(ngModel)]="selectedDate" (ngModelChange)="onDateChange()" />
+        <button (click)="markAllPresent()" class="mark-btn-success" [disabled]="isAttendanceLocked">Mark All
+          Present</button>
+        <button (click)="markAllAbsent()" class="mark-btn-danger" [disabled]="isAttendanceLocked">Mark All
+          Absent</button>
+        <button (click)="saveAttendance()" class="save-btn" [disabled]="isAttendanceLocked">Save Attendance</button>
+      </div>
+
+      <!-- Warning Message when Locked -->
+      <div *ngIf="isAttendanceLocked" class="locked-warning"
+        style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #ffeeba;">
+        <strong>⚠️ Attendance Locked:</strong> Attendance for this date has already been submitted. Please contact the
+        Admin to make changes.
       </div>
 
       <table class="attendance-table">
@@ -96,7 +109,7 @@
             <td>{{ s.id }}</td>
             <td>{{ s.name }}</td>
             <td>
-              <select [(ngModel)]="s.present" class="status-select">
+              <select [(ngModel)]="s.present" class="status-select" [disabled]="isAttendanceLocked">
                 <option [ngValue]="true">Present</option>
                 <option [ngValue]="false">Absent</option>
               </select>

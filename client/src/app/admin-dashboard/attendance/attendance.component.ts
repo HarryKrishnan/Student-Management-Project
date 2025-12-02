@@ -19,6 +19,8 @@ export class AttendanceComponent implements OnInit {
   classStudents: any[] = [];
   attendanceMap: { [studentId: number]: 'Present' | 'Absent' } = {};
   existingAttendance: any[] = [];
+  editingRecordId: number | null = null;  // Track which record is being edited
+  editingStatus: 'Present' | 'Absent' = 'Present';  // Temporary status during edit
 
   // History
   attendanceHistory: any[] = [];
@@ -78,7 +80,11 @@ export class AttendanceComponent implements OnInit {
     const selectedClass = this.allClasses.find(c => c.id === this.selectedClassId);
     if (!selectedClass) return;
 
-    const className = `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
+    // Backend stores class_name (number) and division separately
+    const targetClassNumber = String(selectedClass.class_number || selectedClass.classNumber);
+    const targetDivision = selectedClass.division;
+
+    console.log(`Loading attendance for Class ${targetClassNumber} ${targetDivision} on ${this.selectedDate}`);
 
     // Load existing attendance for this class and date
     this.api.getAllAttendance().subscribe({
@@ -88,13 +94,22 @@ export class AttendanceComponent implements OnInit {
         // Filter for selected class and date
         this.existingAttendance = allAttendance.filter((a: any) => {
           const attendanceDate = a.date.split('T')[0]; // Get date part only
-          const attendanceClass = a.class_name || a.className;
-          return attendanceDate === this.selectedDate && attendanceClass === className;
+
+          // Check if record matches class number and division
+          // Backend returns class_name as the number string
+          const recordClassNumber = String(a.class_name || a.className);
+          const recordDivision = a.division;
+
+          const isDateMatch = attendanceDate === this.selectedDate;
+          const isClassMatch = recordClassNumber === targetClassNumber && recordDivision === targetDivision;
+
+          return isDateMatch && isClassMatch;
         });
 
         console.log('Existing attendance loaded:', this.existingAttendance.length);
 
         // Update attendance map with existing data
+        this.attendanceMap = {};
         this.existingAttendance.forEach(record => {
           if (record.student) {
             this.attendanceMap[record.student] = record.status;
@@ -103,6 +118,16 @@ export class AttendanceComponent implements OnInit {
       },
       error: (err) => console.error('Error loading attendance:', err)
     });
+  }
+
+  getLastMarkedTime(studentId: number): string {
+    const record = this.existingAttendance.find((a: any) => a.student === studentId);
+    if (!record) return 'Not marked yet';
+
+    if (record.updated_by) {
+      return `Updated by ${record.updated_by}`;
+    }
+    return `Marked by ${record.marked_by || 'Unknown'}`;
   }
 
   saveAllAttendance() {
@@ -116,28 +141,36 @@ export class AttendanceComponent implements OnInit {
 
     const className = `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
 
-    // Prepare bulk attendance data
-    const attendanceRecords = this.classStudents.map(student => ({
-      student: student.id,
-      date: this.selectedDate,
-      status: this.attendanceMap[student.id] || 'Present',
-      class_name: className,
-      division: selectedClass.division,
-      teacher: 1, // Admin user ID
-      marked_by: 'Admin'
-    }));
+    // Get admin user ID from session/local storage
+    const user = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}');
+    const adminId = user.id || 1;
 
-    console.log('Saving attendance records:', attendanceRecords);
+    // Prepare data in the format expected by bulk_mark endpoint
+    const data = {
+      classId: this.selectedClassId,
+      teacherId: adminId,  // Admin acting as teacher
+      date: this.selectedDate,
+      updated_by: 'Admin',  // Track that admin is editing
+      records: this.classStudents.map(student => ({
+        studentId: student.id,
+        present: this.attendanceMap[student.id] === 'Present'
+      }))
+    };
+
+    console.log('Saving attendance data:', data);
 
     // Use bulk mark endpoint
-    this.api.markAttendance({ records: attendanceRecords }).subscribe({
-      next: () => {
+    this.api.markAttendance(data).subscribe({
+      next: (response) => {
+        console.log('Attendance saved response:', response);
         alert('✅ Attendance saved successfully for all students!');
         this.loadAttendanceForDate();
       },
       error: (err) => {
         console.error('Error saving attendance:', err);
-        alert('Error saving attendance. Check console for details.');
+        console.error('Error details:', err.error);
+        const errorMsg = err.error?.detail || JSON.stringify(err.error) || 'Unknown error';
+        alert('Error saving attendance: ' + errorMsg);
       }
     });
   }
@@ -192,13 +225,6 @@ export class AttendanceComponent implements OnInit {
     return `${selectedClass.class_number || selectedClass.classNumber}${selectedClass.division}`;
   }
 
-  getLastMarkedTime(studentId: number): string {
-    const record = this.existingAttendance.find(a => a.student === studentId);
-    if (record) {
-      return new Date(record.updated_at || record.created_at).toLocaleString();
-    }
-    return 'Not marked yet';
-  }
 
   get historyPresentCount(): number {
     return this.attendanceHistory.filter(a => a.status === 'Present').length;
@@ -206,5 +232,45 @@ export class AttendanceComponent implements OnInit {
 
   get historyAbsentCount(): number {
     return this.attendanceHistory.filter(a => a.status === 'Absent').length;
+  }
+
+  // Edit individual attendance record
+  editAttendance(record: any) {
+    this.editingRecordId = record.id;
+    this.editingStatus = record.status;
+  }
+
+  saveEdit(record: any) {
+    if (!this.editingRecordId) return;
+
+    const updateData = {
+      status: this.editingStatus,
+      updated_by: 'Admin'
+    };
+
+    console.log('Updating attendance record:', this.editingRecordId, updateData);
+
+    this.api.updateAttendance(this.editingRecordId, updateData).subscribe({
+      next: (response) => {
+        console.log('Update successful:', response);
+        // Update the local record
+        record.status = this.editingStatus;
+        record.updated_by = 'Admin';
+        alert('✅ Attendance updated successfully!');
+        this.editingRecordId = null;
+        this.loadAttendanceForDate();
+      },
+      error: (err) => {
+        console.error('Error updating attendance:', err);
+        console.error('Error details:', err.error);
+        console.error('Status:', err.status);
+        const errorMsg = err.error?.detail || err.error?.message || JSON.stringify(err.error) || 'Unknown error';
+        alert('Error updating attendance: ' + errorMsg);
+      }
+    });
+  }
+
+  cancelEdit() {
+    this.editingRecordId = null;
   }
 }

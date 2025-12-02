@@ -66,7 +66,8 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       error: (err) => console.error('❌ Profile API Error:', err),
     });
 
-
+    // Load attendance
+    this.loadAttendance(user.id);
 
     // Load marks
     this.loadMarks(user.id);
@@ -77,7 +78,6 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     this.loadStudentEvents(user.id);
 
     // Default mock data
-    this.attendance = { present: 120, absent: 5 };
     this.classAdvisor = {
       title: 'Class Advisor',
       name: 'Mrs. Anita Sharma',
@@ -93,25 +93,13 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     ];
 
     this.displayedTeacherContact = this.classAdvisor;
-    this.allHomeworks = [
-      { subject: 'Math', title: 'Algebra II Worksheet', dueDate: '2025-11-01' },
-      { subject: 'Science', title: 'Biology Lab Report', dueDate: '2025-11-05' },
-      { subject: 'History', title: 'Renaissance Essay', dueDate: '2025-11-08' },
-      { subject: 'Math', title: 'Geometry Proofs', dueDate: '2025-11-10' },
-      { subject: 'English', title: 'To Kill a Mockingbird Quiz', dueDate: '2025-11-12' }
-    ];
-
-    // this.allMarks = [
-    //   { subject: 'Math', score: 88 },
-    //   { subject: 'Science', score: 92 },
-    //   { subject: 'History', score: 78 },
-    //   { subject: 'English', score: 85 }
-    // ];
+    // Assignment data will be loaded from backend once Assignment model is implemented
+    this.allHomeworks = [];
 
     this.filterDashboard();
     this.calculateAverageGrade();
 
-    // 🔄 REAL-TIME POLLING: Auto-refresh leave requests and events every 10 seconds
+    // 🔄 REAL-TIME POLLING: Auto-refresh leave requests, events, marks, and attendance every 10 seconds
     interval(this.refreshInterval)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -119,7 +107,39 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
         this.loadLeaveHistory(user.id);
         this.loadStudentEvents(user.id);
         this.loadMarks(user.id);
+        this.loadAttendance(user.id);
       });
+  }
+
+  loadAttendance(studentId: number) {
+    this.api.getAttendanceByStudent(studentId).subscribe({
+      next: (res: any) => {
+        // Handle array response
+        const attendanceRecords = Array.isArray(res) ? res : [];
+
+        // Calculate statistics
+        const totalDays = attendanceRecords.length;
+        const presentDays = attendanceRecords.filter((a: any) => a.status === 'Present').length;
+        const absentDays = attendanceRecords.filter((a: any) => a.status === 'Absent').length;
+
+        // Update attendance object for the pie chart
+        this.attendance = {
+          present: presentDays,
+          absent: absentDays
+        };
+
+        // Recreate the attendance chart with real data
+        if (totalDays > 0) {
+          this.createAttendanceChart();
+        }
+
+        console.log('✅ Attendance loaded:', { totalDays, presentDays, absentDays });
+      },
+      error: (err) => {
+        console.error('❌ Attendance load error:', err);
+        // Keep default mock data if API fails
+      }
+    });
   }
 
   loadMarks(studentId: number) {
