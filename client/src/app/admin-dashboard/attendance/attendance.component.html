@@ -99,6 +99,8 @@
           <th>Student</th>
           <th>Status</th>
           <th>Marked By</th>
+          <th>Updated By</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -106,11 +108,33 @@
           <td>{{ record.date }}</td>
           <td>{{ record.student_name }}</td>
           <td>
-            <span class="tag" [ngClass]="record.status.toLowerCase()">
+            <!-- Show dropdown if editing, otherwise show tag -->
+            <select *ngIf="editingRecordId === record.id" [(ngModel)]="editingStatus" class="status-select-inline">
+              <option value="Present">✅ Present</option>
+              <option value="Absent">❌ Absent</option>
+            </select>
+            <span *ngIf="editingRecordId !== record.id" class="tag" [ngClass]="record.status.toLowerCase()">
               {{ record.status }}
             </span>
           </td>
           <td>{{ record.marked_by || 'Admin' }}</td>
+          <td>
+            <span *ngIf="record.updated_by" class="updated-badge">
+              {{ record.updated_by }}
+            </span>
+            <span *ngIf="!record.updated_by" class="no-edit">-</span>
+          </td>
+          <td>
+            <!-- Edit mode buttons -->
+            <div *ngIf="editingRecordId === record.id" class="action-buttons">
+              <button class="save-btn-small" (click)="saveEdit(record)">💾 Save</button>
+              <button class="cancel-btn-small" (click)="cancelEdit()">❌ Cancel</button>
+            </div>
+            <!-- Normal mode button -->
+            <button *ngIf="editingRecordId !== record.id" class="edit-btn-small" (click)="editAttendance(record)">
+              ✏️ Edit
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>

@@ -125,6 +125,9 @@ class Attendance(models.Model):
     class_name = models.CharField(max_length=10)
     division = models.CharField(max_length=1, null=True, blank=True)
     marked_by = models.CharField(max_length=255)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)  # Track who last edited
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'attendances'
@@ -252,5 +255,29 @@ class Marks(models.Model):
         if self.total_marks > 0:
             self.percentage = (self.marks_obtained / self.total_marks) * 100
         super().save(*args, **kwargs)
+
+# Assignment Model
+class Assignment(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    subject = models.CharField(max_length=100)
+    class_name = models.CharField(max_length=10)
+    division = models.CharField(max_length=1, null=True, blank=True)
+    due_date = models.DateField()
+    teacher = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='assignments_created',
+        limit_choices_to={'role': 'teacher'}
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'assignments'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.subject} ({self.class_name}{self.division})"
 
 

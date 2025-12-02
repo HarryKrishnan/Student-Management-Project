@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -11,15 +11,32 @@ import { ApiService } from '../services/api.service';   // ✅ Correct path
   templateUrl: './class-teacher-dashboard.component.html',
   styleUrls: ['./class-teacher-dashboard.component.css'],
 })
-export class ClassTeacherDashboardComponent implements OnInit {
-  
+export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
+
+  private refreshInterval: any;
+
   constructor(
     private router: Router,
     private api: ApiService   // ✅ Works now
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.loadTeacherInfo();
+    this.loadAttendanceForDate(); // Check initial date status
+
+    // Poll for updates every 10 seconds
+    this.refreshInterval = setInterval(() => {
+      // Only refresh if not currently editing attendance to avoid overwriting user input
+      if (this.currentView !== 'attendance') {
+        this.loadTeacherInfo();
+      }
+    }, 10000);
+  }
+
+  ngOnDestroy() {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+    }
   }
 
   // ====================================
@@ -42,13 +59,13 @@ export class ClassTeacherDashboardComponent implements OnInit {
 
   loadTeacherInfo() {
     const user = JSON.parse(sessionStorage.getItem('user') || localStorage.getItem('user') || '{}');
-    
+
     if (!user || !user.id) {
       console.error('User not found in storage');
       this.router.navigate(['/login']);
       return;
     }
-    
+
     this.teacherId = user.id;
     this.teacherName = user.name;
 
@@ -56,7 +73,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
     this.api.getClassTeacherDashboard(this.teacherId).subscribe({
       next: (dashboardData: any) => {
         console.log('Dashboard data received:', dashboardData);
-        
+
         if (!dashboardData.class) {
           console.error('No class found for this teacher');
           this.isClassTeacher = false;
@@ -64,9 +81,9 @@ export class ClassTeacherDashboardComponent implements OnInit {
           this.router.navigate(['/teacher/role-select']);
           return;
         }
-        
+
         this.isClassTeacher = true;
-        
+
         // Class Information
         this.classInfo = dashboardData.class;
         this.classId = dashboardData.class.id;
@@ -76,28 +93,32 @@ export class ClassTeacherDashboardComponent implements OnInit {
           email: dashboardData.teacher.email,
           role: dashboardData.teacher.role
         };
-        
-        // Students
-        this.students = dashboardData.students || [];
+
+        // Students - Initialize with present property for attendance marking
+        this.students = (dashboardData.students || []).map((student: any) => ({
+          ...student,
+          present: true  // Default to present
+        }));
         this.totalStudents = dashboardData.total_students || 0;
-        
+
         // Attendance
         this.presentToday = dashboardData.present_today || 0;
-        
+        this.absentToday = dashboardData.absent_today || 0;
+
         // Leave Requests
         this.leaveRequests = dashboardData.pending_leaves || [];
-        
+
         // Events
         this.events = dashboardData.events || [];
-        
+
         // Subjects
         if (dashboardData.subjects && dashboardData.subjects.length > 0) {
           this.subjectList = ['All Subjects', ...dashboardData.subjects.map((s: any) => s.name)];
         }
-        
+
         // Load marks for this class
         this.loadMarksForClass();
-        
+
         console.log('Dashboard loaded successfully');
       },
       error: (err) => {
@@ -129,27 +150,27 @@ export class ClassTeacherDashboardComponent implements OnInit {
     let filtered = this.students.filter(s =>
       s.name.toLowerCase().includes(this.searchTerm.toLowerCase())
     );
-    
+
     // Sort the filtered students
     filtered.sort((a, b) => {
       let aVal = a[this.sortColumn];
       let bVal = b[this.sortColumn];
-      
+
       if (aVal == null) aVal = '';
       if (bVal == null) bVal = '';
-      
+
       if (typeof aVal === 'string') {
         aVal = aVal.toLowerCase();
         bVal = (bVal as string).toLowerCase();
       }
-      
+
       let comparison = 0;
       if (aVal < bVal) comparison = -1;
       if (aVal > bVal) comparison = 1;
-      
+
       return this.sortOrder === 'asc' ? comparison : -comparison;
     });
-    
+
     return filtered;
   }
 
@@ -168,7 +189,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
 
   saveStudentEdit() {
     if (!this.editingStudent) return;
-    
+
     const updateData = {
       name: this.editingStudent.name,
       email: this.editingStudent.email,  // Include email (required by serializer)
@@ -176,7 +197,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
       className: this.editingStudent.className,
       division: this.editingStudent.division,
     };
-    
+
     this.api.updateUser(this.editingStudent.id, updateData).subscribe({
       next: () => {
         // Update the local students array
@@ -205,23 +226,91 @@ export class ClassTeacherDashboardComponent implements OnInit {
   presentToday: number = 0;
   absentToday: number = 0;
   attendanceDateForDisplay: string = new Date().toISOString().split('T')[0];
+  isAttendanceLocked: boolean = false; // New flag to lock attendance
 
-  // Attendance data is loaded from dashboard endpoint
-  // No separate loadAttendance() needed
+  // Computed properties for real-time counts
+  get currentPresentCount(): number {
+    return this.students.filter(s => s.present === true).length;
+  }
+
+  get currentAbsentCount(): number {
+    return this.students.filter(s => s.present === false).length;
+  }
+
+  onDateChange() {
+    this.loadAttendanceForDate();
+  }
+
+  loadAttendanceForDate() {
+    console.log('Loading attendance for date:', this.selectedDate);
+
+    // Reset lock state initially
+    this.isAttendanceLocked = false;
+
+    this.api.getAllAttendance().subscribe({
+      next: (res: any) => {
+        const allAttendance = Array.isArray(res) ? res : (res.results || []);
+
+        // Filter for this class and date
+        const classAttendance = allAttendance.filter((a: any) => {
+          const recordDate = a.date.split('T')[0];
+          // Check if student belongs to this class (robust check)
+          const studentExists = this.students.find(s => s.id === a.student);
+          return recordDate === this.selectedDate && studentExists;
+        });
+
+        console.log(`Found ${classAttendance.length} records for this date`);
+
+        if (classAttendance.length > 0) {
+          // Attendance already marked - LOCK IT
+          this.isAttendanceLocked = true;
+
+          // Update local students with fetched status
+          this.students.forEach(student => {
+            const record = classAttendance.find((a: any) => a.student === student.id);
+            if (record) {
+              student.present = record.status === 'Present';
+            } else {
+              // If some students missing in record, default to present but keep locked?
+              // Better to keep them as is or default true.
+              student.present = true;
+            }
+          });
+
+          console.log('Attendance locked. Records loaded from backend.');
+        } else {
+          // No attendance marked yet - UNLOCKED
+          this.isAttendanceLocked = false;
+          // Reset to default present
+          this.students.forEach(s => s.present = true);
+          console.log('No existing attendance. Unlocked for marking.');
+        }
+      },
+      error: (err) => console.error('Error loading attendance:', err)
+    });
+  }
 
   markAllPresent() {
     this.students.forEach(s => s.present = true);
+    console.log('Marked all students as present');
   }
 
   markAllAbsent() {
     this.students.forEach(s => s.present = false);
+    console.log('Marked all students as absent');
   }
 
   saveAttendance() {
+    const presentCount = this.students.filter(s => s.present).length;
+    const absentCount = this.students.filter(s => !s.present).length;
+
+    console.log(`Saving attendance: ${presentCount} present, ${absentCount} absent`);
+
     const data = {
       classId: this.classId,
       teacherId: this.teacherId,  // Add teacher ID
       date: this.selectedDate,
+      updated_by: this.teacherName,  // Track who is marking/editing
       records: this.students.map(s => ({
         studentId: s.id,
         present: s.present,
@@ -236,12 +325,14 @@ export class ClassTeacherDashboardComponent implements OnInit {
         this.presentToday = this.students.filter(s => s.present).length;
         this.absentToday = this.students.filter(s => !s.present).length;
         this.attendanceDateForDisplay = this.selectedDate;
-        alert('Attendance saved successfully!');
-        // Reload dashboard to show updated stats
-        this.loadTeacherInfo();
+        console.log(`Updated counts - Present: ${this.presentToday}, Absent: ${this.absentToday}`);
+        alert('✅ Attendance saved successfully!');
+        // Don't reload dashboard - it resets the student.present values
+        // this.loadTeacherInfo();
       },
       error: (err) => {
         console.error('Error saving attendance:', err);
+        console.error('Error details:', err.error);
         const errorMessage = err.error?.detail || JSON.stringify(err.error) || err.message || 'Unknown error';
         alert('Error saving attendance: ' + errorMessage);
       }
@@ -320,7 +411,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
 
   loadMarksForClass() {
     if (!this.classId) return;
-    
+
     this.api.getMarksByClass(this.classId).subscribe({
       next: (response: any) => {
         console.log('Marks data received:', response);
@@ -338,7 +429,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
   processMarksData() {
     // Group marks by student
     const marksMap = new Map();
-    
+
     this.marksData.forEach((mark: any) => {
       if (!marksMap.has(mark.student_id)) {
         const student = this.students.find(s => s.id === mark.student_id);
@@ -351,7 +442,7 @@ export class ClassTeacherDashboardComponent implements OnInit {
       }
       marksMap.get(mark.student_id).marks.push(mark);
     });
-    
+
     this.studentsMarks = Array.from(marksMap.values());
   }
 

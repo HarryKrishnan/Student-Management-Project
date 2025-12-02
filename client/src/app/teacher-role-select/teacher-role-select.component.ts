@@ -16,11 +16,11 @@ export class TeacherRoleSelectComponent {
   classAssigned: any = null;
   isClassTeacher: boolean = false;
 
-  constructor(private api: ApiService, private router: Router) {}
+  constructor(private api: ApiService, private router: Router) { }
 
   ngOnInit() {
     this.user = JSON.parse(localStorage.getItem('user') || '{}');
-    
+
     if (!this.user || !this.user.id) {
       console.error('User not found, redirecting to login');
       this.router.navigate(['/login']);
@@ -53,13 +53,13 @@ export class TeacherRoleSelectComponent {
 
   goToClassTeacher() {
     console.log('goToClassTeacher called - isClassTeacher:', this.isClassTeacher, 'classAssigned:', this.classAssigned);
-    
+
     if (!this.isClassTeacher || !this.classAssigned) {
       alert("❌ You are not assigned as a Class Teacher.");
       console.warn('Cannot navigate: isClassTeacher=', this.isClassTeacher, 'classAssigned=', this.classAssigned);
       return;
     }
-    
+
     console.log('Navigating to class dashboard with classId:', this.classAssigned.id);
     // Redirect to the class teacher dashboard for the assigned class
     this.router.navigate(['/teacher/class-dashboard', this.classAssigned.id]).then(
@@ -70,5 +70,11 @@ export class TeacherRoleSelectComponent {
 
   goToSubjectTeacher() {
     this.router.navigate(['/teacher/subject-dashboard']);
+  }
+
+  logout() {
+    sessionStorage.clear();
+    localStorage.clear();
+    this.router.navigate(['/login']);
   }
 }

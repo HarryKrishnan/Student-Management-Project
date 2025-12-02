@@ -183,7 +183,7 @@ export class ApiService {
   }
 
   updateAttendance(id: number, attendanceData: any): Observable<any> {
-    return this.http.put(`${this.baseUrl}/attendance/${id}/`, attendanceData, this.getHttpOptions());
+    return this.http.patch(`${this.baseUrl}/attendance/${id}/`, attendanceData, this.getHttpOptions());
   }
 
   deleteAttendance(id: number): Observable<any> {
@@ -297,6 +297,23 @@ export class ApiService {
         response?.results ? response.results : Array.isArray(response) ? response : []
       )
     );
+  }
+
+  // ========== Assignments ==========
+  getAssignmentsByClass(className: string, division: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/assignments/?class_name=${className}&division=${division}`, this.getHttpOptions());
+  }
+
+  getAssignmentsByTeacher(teacherId: number): Observable<any> {
+    return this.http.get(`${this.baseUrl}/assignments/?teacher_id=${teacherId}`, this.getHttpOptions());
+  }
+
+  createAssignment(assignmentData: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/assignments/`, assignmentData, this.getHttpOptions());
+  }
+
+  deleteAssignment(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/assignments/${id}/`, this.getHttpOptions());
   }
 
   getClassEvents(classId: number): Observable<any> {
