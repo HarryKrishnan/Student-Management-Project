@@ -1,7 +1,7 @@
 <div class="subjects-container">
 
   <h2 class="title">📚 Manage Subjects</h2>
-  <p class="subtitle">Assign subjects to teachers</p>
+  <p class="subtitle">Assign subjects to teachers and manage your curriculum</p>
 
   <!-- ✅ Add Subject Form Card -->
   <div class="form-card">
@@ -11,11 +11,11 @@
 
       <!-- ✅ Teacher Dropdown -->
       <div class="form-group">
-        <label>Teacher</label>
+        <label>Select Teacher</label>
         <select [(ngModel)]="newSubject.teacherId" name="teacher" required>
-          <option value="" disabled selected>Select Teacher</option>
+          <option value="" disabled selected>Choose a teacher...</option>
           <option *ngFor="let t of teachers" [value]="t.id">
-            {{ t.name }} ({{ t.subject }})
+            {{ t.name }} - {{ t.subject }}
           </option>
         </select>
       </div>
@@ -26,18 +26,20 @@
         <input type="text" [value]="getTeacherSubject(newSubject.teacherId)" disabled class="subject-display" />
       </div>
 
-      <button type="submit" class="add-btn" [disabled]="!newSubject.teacherId">💾 Add Subject</button>
+      <button type="submit" class="add-btn" [disabled]="!newSubject.teacherId">
+        💾 Add Subject
+      </button>
     </form>
 
-    <p *ngIf="message" class="success">{{ message }}</p>
-    <p *ngIf="error" class="error">{{ error }}</p>
+    <p *ngIf="message" class="success">✅ {{ message }}</p>
+    <p *ngIf="error" class="error">❌ {{ error }}</p>
   </div>
 
   <!-- ✅ Subjects Table -->
   <div class="table-card">
     <h3 class="section-title">📖 Subjects List</h3>
 
-    <table>
+    <table *ngIf="subjects.length > 0">
       <thead>
         <tr>
           <th>#</th>
@@ -51,17 +53,19 @@
         <tr *ngFor="let s of subjects; let i = index">
           <td>{{ i + 1 }}</td>
           <td>{{ s.name }}</td>
-          <td>{{ s.class_teacher?.name || s.teacher?.name || "—" }}</td>
+          <td>{{ s.teacher_name || s.class_teacher?.name || "Not Assigned" }}</td>
           <td>
             <button class="delete-btn" (click)="deleteSubject(s.id)">
-              Delete
+              🗑️ Delete
             </button>
           </td>
         </tr>
       </tbody>
     </table>
 
-    <p class="empty" *ngIf="subjects.length === 0">No subjects added yet 😕</p>
+    <p class="empty" *ngIf="subjects.length === 0">
+      📭 No subjects added yet. Start by adding your first subject above!
+    </p>
   </div>
 
 </div>

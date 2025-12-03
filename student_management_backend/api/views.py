@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.contrib.auth import authenticate
 from django.db.models import Q
+from django.db import models
 from .models import User, Class, Attendance, Leave, Subject, Event, Marks, Assignment, Resource
 from .serializers import (
     UserSerializer, LoginSerializer, ClassSerializer,
@@ -150,6 +151,24 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             password = request.data.get('password', 'defaultpassword')
+            
+            # Auto-generate roll number for students
+            roll_number = None
+            if serializer.validated_data['role'] == 'student':
+                className = serializer.validated_data.get('className')
+                division = serializer.validated_data.get('division')
+                
+                if className and division:
+                    # Get the max roll number for this class
+                    max_roll = User.objects.filter(
+                        role='student',
+                        className=className,
+                        division=division
+                    ).aggregate(models.Max('roll_number'))['roll_number__max']
+                    
+                    # Increment or start from 1
+                    roll_number = (max_roll or 0) + 1
+            
             user = User.objects.create_user(
                 email=serializer.validated_data['email'],
                 password=password,
@@ -157,6 +176,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 role=serializer.validated_data['role'],
                 className=serializer.validated_data.get('className'),
                 division=serializer.validated_data.get('division'),
+                roll_number=roll_number,
                 subject=serializer.validated_data.get('subject'),
                 phone=serializer.validated_data.get('phone')
             )

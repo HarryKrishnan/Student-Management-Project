@@ -42,9 +42,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     phone = models.CharField(max_length=15, null=True, blank=True)
     
+    
     # For students
     className = models.CharField(max_length=10, null=True, blank=True)
     division = models.CharField(max_length=1, null=True, blank=True)
+    roll_number = models.IntegerField(null=True, blank=True)
+    
     
     # For teachers
     subject = models.CharField(max_length=100, null=True, blank=True)

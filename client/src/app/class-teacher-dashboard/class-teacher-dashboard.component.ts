@@ -108,8 +108,8 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
         // Leave Requests
         this.leaveRequests = dashboardData.pending_leaves || [];
 
-        // Events
-        this.events = dashboardData.events || [];
+        // Load events separately to ensure proper filtering
+        this.loadEvents();
 
         // Subjects
         if (dashboardData.subjects && dashboardData.subjects.length > 0) {
@@ -382,20 +382,68 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
     if (!this.newEvent.title || !this.newEvent.date) return;
 
     const data = {
-      classId: this.classId,
-      ...this.newEvent,
+      title: this.newEvent.title,
+      date: this.newEvent.date,
+      description: this.newEvent.description || '',
+      audience: 'CLASS',
+      class_name: this.classInfo.class_number.toString(),
+      division: this.classInfo.division,
+      created_by: this.teacherName
     };
 
-    this.api.createEvent(data).subscribe((res: any) => {
-      this.events.push(res);
-      this.newEvent = { title: '', date: '', description: '' };
+    this.api.createEvent(data).subscribe({
+      next: (res: any) => {
+        console.log('Event created:', res);
+        // Reload events from backend to ensure persistence
+        this.loadEvents();
+        this.newEvent = { title: '', date: '', description: '' };
+      },
+      error: (err) => {
+        console.error('Error creating event:', err);
+        alert('Failed to create event. Please try again.');
+      }
+    });
+  }
+
+  loadEvents() {
+    if (!this.classInfo) return;
+
+    // Load events for this specific class
+    this.api.getAllEvents().subscribe({
+      next: (events: any) => {
+        // Filter events for this class or all classes
+        const allEvents = Array.isArray(events) ? events : (events.results || []);
+        this.events = allEvents.filter((e: any) =>
+          e.audience === 'ALL' ||
+          (e.audience === 'CLASS' &&
+            e.class_name === this.classInfo.class_number.toString() &&
+            e.division === this.classInfo.division)
+        );
+        console.log('Events loaded:', this.events);
+      },
+      error: (err) => {
+        console.error('Error loading events:', err);
+        this.events = [];
+      }
     });
   }
 
   deleteEvent(i: number) {
     const id = this.events[i].id;
-    this.api.deleteEvent(id).subscribe(() => {
-      this.events.splice(i, 1);
+    if (!confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+
+    this.api.deleteEvent(id).subscribe({
+      next: () => {
+        console.log('Event deleted');
+        // Reload events to reflect the deletion
+        this.loadEvents();
+      },
+      error: (err) => {
+        console.error('Error deleting event:', err);
+        alert('Failed to delete event. Please try again.');
+      }
     });
   }
 
