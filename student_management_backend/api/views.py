@@ -243,12 +243,13 @@ class ClassViewSet(viewsets.ModelViewSet):
                 class_name=f"{class_obj.class_number}{class_obj.division}"
             )
             
-            # Get pending leave requests for this class
-            pending_leaves = Leave.objects.filter(
-                status='Pending',
+            
+            # Get all leave requests for this class (not just pending)
+            all_leaves = Leave.objects.filter(
                 student__className=class_obj.class_number,
                 student__division=class_obj.division
-            )
+            ).order_by('-created_at')  # Most recent first
+            
             
             # Get events for this class
             events = Event.objects.filter(
@@ -327,7 +328,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 'teacher': UserSerializer(teacher).data,
                 'students': UserSerializer(students, many=True).data,
                 'attendance_today': AttendanceSerializer(attendance_today, many=True).data,
-                'pending_leaves': LeaveSerializer(pending_leaves, many=True).data,
+                'pending_leaves': LeaveSerializer(all_leaves, many=True).data,  # Now includes all leave requests
                 'events': EventSerializer(events, many=True).data,
                 'subjects': SubjectSerializer(subjects, many=True).data,
                 'academic_overview': academic_overview,  # Add this new field

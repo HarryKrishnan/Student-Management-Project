@@ -187,22 +187,35 @@
 
     <!-- 👉 Leave Requests -->
     <div *ngIf="currentView === 'leave'">
-      <h2>Leave Requests</h2>
+      <h2>Leave Requests & History</h2>
+      <p class="subtitle">All leave requests from your class students</p>
 
       <table class="leave-table">
         <thead>
           <tr>
             <th>Student</th>
             <th>Reason</th>
+            <th>Start Date</th>
+            <th>End Date</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let leave of leaveRequests">
-            <td>{{ leave.student }}</td>
+            <td>{{ leave.student_name || leave.student }}</td>
             <td>{{ leave.reason }}</td>
-            <td>{{ leave.status }}</td>
+            <td>{{ leave.start_date | date:'MMM d, y' }}</td>
+            <td>{{ leave.end_date | date:'MMM d, y' }}</td>
+            <td>
+              <span class="status-badge" [ngClass]="{
+                'status-pending': leave.status === 'Pending',
+                'status-approved': leave.status === 'Approved',
+                'status-rejected': leave.status === 'Rejected'
+              }">
+                {{ leave.status }}
+              </span>
+            </td>
             <td>
               <button class="approve-btn" (click)="approveLeave(leave)"
                 [disabled]="leave.status !== 'Pending'">Approve</button>
@@ -212,38 +225,67 @@
           </tr>
         </tbody>
       </table>
+
+      <p class="empty-message" *ngIf="leaveRequests.length === 0">
+        No leave requests yet.
+      </p>
     </div>
 
     <!-- 👉 Events -->
     <div *ngIf="currentView === 'events'">
       <div class="event-management-panel">
-        <h2>Upcoming Events</h2>
+        <h2>Manage Events</h2>
+        <p class="subtitle">Create and manage events for your class</p>
 
-        <div class="attendance-controls">
-          <input placeholder="Event Title" [(ngModel)]="newEvent.title" />
-          <input type="date" [(ngModel)]="newEvent.date" />
-          <input placeholder="Description" [(ngModel)]="newEvent.description" />
-          <button (click)="addEvent()">Add Event</button>
+        <div class="event-form-card">
+          <h3>➕ Add New Event</h3>
+          <div class="event-form">
+            <div class="form-group">
+              <label>Event Title</label>
+              <input type="text" placeholder="Enter event title..." [(ngModel)]="newEvent.title" />
+            </div>
+            <div class="form-group">
+              <label>Event Date</label>
+              <input type="date" [(ngModel)]="newEvent.date" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" placeholder="Event description..." [(ngModel)]="newEvent.description" />
+            </div>
+            <button class="add-event-btn" (click)="addEvent()">
+              📅 Add Event
+            </button>
+          </div>
         </div>
 
-        <table class="leave-table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Date</th>
-              <th>Description</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let e of events; let i = index">
-              <td>{{ e.title }}</td>
-              <td>{{ e.date }}</td>
-              <td>{{ e.description }}</td>
-              <td><button class="reject-btn" (click)="deleteEvent(i)">Delete</button></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="events-list-card">
+          <h3>📋 Events List</h3>
+          <table class="events-table" *ngIf="events.length > 0">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of events; let i = index">
+                <td><strong>{{ e.title }}</strong></td>
+                <td>{{ e.date | date:'MMM d, y' }}</td>
+                <td>{{ e.description || 'No description' }}</td>
+                <td>
+                  <button class="delete-event-btn" (click)="deleteEvent(i)">
+                    🗑️ Delete
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="empty-message" *ngIf="events.length === 0">
+            No events scheduled yet. Add your first event above!
+          </p>
+        </div>
       </div>
     </div>
 

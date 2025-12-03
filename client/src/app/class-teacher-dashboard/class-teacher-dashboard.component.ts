@@ -105,8 +105,8 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
         this.presentToday = dashboardData.present_today || 0;
         this.absentToday = dashboardData.absent_today || 0;
 
-        // Leave Requests
-        this.leaveRequests = dashboardData.pending_leaves || [];
+        // Leave Requests (all statuses)
+        this.leaveRequests = dashboardData.pending_leaves || [];  // API key name remains same for compatibility
 
         // Load events separately to ensure proper filtering
         this.loadEvents();

@@ -240,17 +240,27 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       next: (events) => {
         // Filter for public events or events specific to the student's class
         if (Array.isArray(events)) {
-          this.allExams = events.map((e: any) => ({
-            subject: 'Event',
-            title: e.title,
-            date: e.date,
-            description: e.description || '',
-            audience: e.audience
-          }));
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+
+          this.allExams = events
+            .filter((e: any) => {
+              // Filter out past events
+              const eventDate = new Date(e.date);
+              eventDate.setHours(0, 0, 0, 0);
+              return eventDate >= today; // Only include today and future events
+            })
+            .map((e: any) => ({
+              subject: 'Event',
+              title: e.title,
+              date: e.date,
+              description: e.description || '',
+              audience: e.audience
+            }));
         } else {
           this.allExams = [];
         }
-        console.log('✅ Events loaded:', this.allExams);
+        console.log('✅ Events loaded (filtered for current/future):', this.allExams);
         this.filterDashboard();
       },
       error: (err) => {
