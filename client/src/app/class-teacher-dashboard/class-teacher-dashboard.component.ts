@@ -116,8 +116,14 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
           this.subjectList = ['All Subjects', ...dashboardData.subjects.map((s: any) => s.name)];
         }
 
+        // Academic Overview
+        this.academicOverviewData = dashboardData.academic_overview || [];
+
         // Load marks for this class
         this.loadMarksForClass();
+
+        // Load assignments for this class
+        this.loadAssignments();
 
         console.log('Dashboard loaded successfully');
       },
@@ -400,11 +406,20 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
   studentsMarks: any[] = [];
   subjectsData: any[] = [];
   marksData: any[] = [];
+  assignments: any[] = [];  // Store assignments for this class
   selectedSubjectView: string = 'All Subjects';
   selectedExamView: string = 'Final Exam';
   examTypes: string[] = ['Unit Test 1', 'Unit Test 2', 'Mid Term', 'Unit Test 3', 'Final Exam'];
   subjectFilter: string = 'All';
   filteredSubjects: any[] = [];
+  academicOverviewData: any[] = [];
+
+  get filteredAcademicOverview() {
+    if (this.subjectFilter === 'All') {
+      return this.academicOverviewData;
+    }
+    return this.academicOverviewData.filter(s => s.name === this.subjectFilter);
+  }
 
   // Subjects data is loaded from dashboard endpoint
   // No separate loadTeacherSubjects() needed
@@ -444,6 +459,32 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
     });
 
     this.studentsMarks = Array.from(marksMap.values());
+  }
+
+  loadAssignments() {
+    if (!this.classInfo) return;
+
+    const className = this.classInfo.class_number.toString();
+    const division = this.classInfo.division;
+
+    this.api.getAssignmentsByClass(className, division).subscribe({
+      next: (response: any) => {
+        const assignments = Array.isArray(response) ? response : (response.results || []);
+        this.assignments = assignments.map((assignment: any) => ({
+          id: assignment.id,
+          title: assignment.title,
+          subject: assignment.subject,
+          dueDate: assignment.due_date,
+          description: assignment.description || '',
+          teacher: assignment.teacher
+        }));
+        console.log('✅ Assignments loaded for class:', this.assignments.length);
+      },
+      error: (err) => {
+        console.error('❌ Error loading assignments:', err);
+        this.assignments = [];
+      }
+    });
   }
 
   // ====================================

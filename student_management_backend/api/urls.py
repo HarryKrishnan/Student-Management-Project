@@ -10,6 +10,8 @@ router.register(r'leaves', views.LeaveViewSet)
 router.register(r'subjects', views.SubjectViewSet)
 router.register(r'events', views.EventViewSet)
 router.register(r'marks', views.MarksViewSet)
+router.register(r'assignments', views.AssignmentViewSet)
+router.register(r'resources', views.ResourceViewSet)
 
 urlpatterns = [
     # Auth endpoints

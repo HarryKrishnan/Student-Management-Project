@@ -202,7 +202,37 @@
         </div>
       </ng-template>
     </div>
+<!-- Study Materials Widget -->
+<div class="widget study-materials">
+    <h3>📚 Study Materials</h3>
 
+    <!-- Subject Filter -->
+    <div class="filter-controls" *ngIf="subjects.length > 1">
+        <label for="subjectFilter">Filter by Subject:</label>
+        <select id="subjectFilter" [(ngModel)]="selectedSubjectForResources" (change)="filterResources()">
+            <option *ngFor="let subject of subjects" [value]="subject">{{ subject }}</option>
+        </select>
+    </div>
+
+    <!-- Resources List -->
+    <div class="resource-list" *ngIf="displayedResources.length > 0; else noResources">
+        <div class="resource-item" *ngFor="let resource of displayedResources">
+            <div class="resource-icon">📄</div>
+            <div class="resource-details">
+                <h4>{{ resource.title }}</h4>
+                <p class="resource-subject">{{ resource.subject }}</p>
+                <a [href]="resource.link" target="_blank" rel="noopener noreferrer" class="resource-link">Open Resource
+                    →</a>
+            </div>
+        </div>
+    </div>
+
+    <ng-template #noResources>
+        <div class="empty-state">
+            <p>No study materials available yet.</p>
+        </div>
+    </ng-template>
+</div>
   </div> <!-- End of Dashboard Grid -->
 
 </div> <!-- End of Body Container -->

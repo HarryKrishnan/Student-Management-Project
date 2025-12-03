@@ -84,6 +84,12 @@ export class SubjectTeacherDashboardComponent implements OnInit {
 
           // Map students and merge with marks
           this.processStudentsAndMarks(data.students, data.marks);
+
+          // Load assignments for this class
+          this.loadAssignments();
+
+          // Load resources for this class
+          this.loadResources();
         } else {
           this.currentClass = null;
           this.students = [];
@@ -201,11 +207,58 @@ export class SubjectTeacherDashboardComponent implements OnInit {
     }
   }
 
-  /* Assignments - Placeholder for now as backend doesn't have Assignment model fully integrated yet */
+  /* Assignments - Save to backend */
   addAssignment() {
-    if (!this.newAssignment.title) return;
-    this.assignments.push({ ...this.newAssignment, status: 'Pending' });
-    this.newAssignment = { title: '', dueDate: '', description: '' };
+    if (!this.newAssignment.title || !this.newAssignment.dueDate) {
+      alert('❌ Please fill in title and due date');
+      return;
+    }
+
+    if (!this.currentClass) {
+      alert('❌ Please select a class first');
+      return;
+    }
+
+    const assignmentData = {
+      teacher: this.teacherId,
+      subject: this.subjectName,
+      class_name: this.currentClass.class_number.toString(),
+      division: this.currentClass.division,
+      title: this.newAssignment.title,
+      description: this.newAssignment.description || '',
+      due_date: this.newAssignment.dueDate
+    };
+
+    this.apiService.createAssignment(assignmentData).subscribe({
+      next: (res) => {
+        alert(`✅ Assignment "${this.newAssignment.title}" created successfully!`);
+        this.assignments.push(res);
+        this.newAssignment = { title: '', dueDate: '', description: '' };
+        this.loadAssignments(); // Reload to get fresh data
+      },
+      error: (err) => {
+        console.error('Error creating assignment:', err);
+        alert('❌ Failed to create assignment. Please try again.');
+      }
+    });
+  }
+
+  loadAssignments() {
+    if (!this.currentClass) return;
+
+    const className = this.currentClass.class_number.toString();
+    const division = this.currentClass.division;
+
+    this.apiService.getAssignmentsByClass(className, division).subscribe({
+      next: (response: any) => {
+        this.assignments = Array.isArray(response) ? response : (response.results || []);
+        console.log('✅ Assignments loaded:', this.assignments.length);
+      },
+      error: (err) => {
+        console.error('❌ Error loading assignments:', err);
+        this.assignments = [];
+      }
+    });
   }
 
   editAssignment(a: any) {
@@ -213,13 +266,86 @@ export class SubjectTeacherDashboardComponent implements OnInit {
   }
 
   deleteAssignment(a: any) {
-    this.assignments = this.assignments.filter(x => x !== a);
+    if (!confirm(`Delete assignment "${a.title}"?`)) return;
+
+    this.apiService.deleteAssignment(a.id).subscribe({
+      next: () => {
+        this.assignments = this.assignments.filter(x => x.id !== a.id);
+        alert('✅ Assignment deleted successfully');
+      },
+      error: (err) => {
+        console.error('Error deleting assignment:', err);
+        alert('❌ Failed to delete assignment');
+      }
+    });
   }
 
-  /* Resources - Placeholder */
+
+  /* Resources - Save to backend */
   addResource() {
-    if (!this.newResource.title || !this.newResource.link) return;
-    this.resources.push({ ...this.newResource });
-    this.newResource = { title: '', link: '' };
+    if (!this.newResource.title || !this.newResource.link) {
+      alert('❌ Please fill in title and link');
+      return;
+    }
+
+    if (!this.currentClass) {
+      alert('❌ Please select a class first');
+      return;
+    }
+
+    const resourceData = {
+      teacher: this.teacherId,
+      subject: this.subjectName,
+      class_name: this.currentClass.class_number.toString(),
+      division: this.currentClass.division,
+      title: this.newResource.title,
+      link: this.newResource.link
+    };
+
+    this.apiService.createResource(resourceData).subscribe({
+      next: (res) => {
+        alert(`✅ Resource "${this.newResource.title}" added successfully!`);
+        this.resources.push(res);
+        this.newResource = { title: '', link: '' };
+        this.loadResources(); // Reload to get fresh data
+      },
+      error: (err) => {
+        console.error('Error creating resource:', err);
+        alert('❌ Failed to add resource. Please try again.');
+      }
+    });
+  }
+
+  loadResources() {
+    if (!this.currentClass || !this.teacherId) return;
+
+    const className = this.currentClass.class_number.toString();
+    const division = this.currentClass.division;
+
+    this.apiService.getResourcesByTeacher(this.teacherId, className, division).subscribe({
+      next: (response: any) => {
+        this.resources = Array.isArray(response) ? response : (response.results || []);
+        console.log('✅ Resources loaded:', this.resources.length);
+      },
+      error: (err) => {
+        console.error('❌ Error loading resources:', err);
+        this.resources = [];
+      }
+    });
+  }
+
+  deleteResource(r: any) {
+    if (!confirm(`Delete resource "${r.title}"?`)) return;
+
+    this.apiService.deleteResource(r.id).subscribe({
+      next: () => {
+        this.resources = this.resources.filter(x => x.id !== r.id);
+        alert('✅ Resource deleted successfully');
+      },
+      error: (err) => {
+        console.error('Error deleting resource:', err);
+        alert('❌ Failed to delete resource');
+      }
+    });
   }
 }

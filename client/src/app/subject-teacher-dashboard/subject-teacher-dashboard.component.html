@@ -10,7 +10,7 @@
 
   <!-- ✅ Sidebar -->
   <div class="teacher-sidebar">
-    
+
     <div class="sidebar-header">
       <h3>Subject Teacher</h3>
 
@@ -21,7 +21,7 @@
         <option *ngFor="let c of classList" [ngValue]="c">{{ c.name }}</option>
       </select>
     </div>
-    
+
     <ul class="sidebar-nav">
       <li>
         <a (click)="setView('overview')" [class.active]="currentView === 'overview'">
@@ -80,9 +80,18 @@
         </div>
 
         <div class="kpi-section" *ngIf="currentClass; else noClassSelected">
-          <div class="kpi-card"><h3>Total Students</h3><p>{{ totalStudents }}</p></div>
-          <div class="kpi-card"><h3>Pending Assignments</h3><p>{{ pendingAssignments }}</p></div>
-          <div class="kpi-card"><h3>Class Average</h3><p>{{ averageMarks }}%</p></div>
+          <div class="kpi-card">
+            <h3>Total Students</h3>
+            <p>{{ totalStudents }}</p>
+          </div>
+          <div class="kpi-card">
+            <h3>Pending Assignments</h3>
+            <p>{{ pendingAssignments }}</p>
+          </div>
+          <div class="kpi-card">
+            <h3>Class Average</h3>
+            <p>{{ averageMarks }}%</p>
+          </div>
         </div>
 
         <ng-template #noClassSelected>
@@ -102,7 +111,8 @@
         <div class="profile-row"><strong>Subject:</strong> {{ subjectName }}</div>
 
         <div *ngIf="teacherProfile.className">
-          <div class="profile-row"><strong>Class Teacher of:</strong> {{ teacherProfile.className }}{{ teacherProfile.division }}</div>
+          <div class="profile-row"><strong>Class Teacher of:</strong> {{ teacherProfile.className }}{{
+            teacherProfile.division }}</div>
         </div>
       </div>
 
@@ -122,9 +132,7 @@
               </div>
 
               <ul class="exam-options" *ngIf="isDropdownOpen">
-                <li *ngFor="let exam of examTypes"
-                    [class.active]="exam === selectedExam"
-                    (click)="selectExam(exam)">
+                <li *ngFor="let exam of examTypes" [class.active]="exam === selectedExam" (click)="selectExam(exam)">
                   {{ exam }}
                 </li>
               </ul>
@@ -148,7 +156,8 @@
                   <td>{{ s.name }}</td>
 
                   <td>
-                    <input type="number" class="marks-input" [(ngModel)]="s.examMarks" min="0" max="100" placeholder="Enter marks">
+                    <input type="number" class="marks-input" [(ngModel)]="s.examMarks" min="0" max="100"
+                      placeholder="Enter marks">
                   </td>
 
                   <td>
@@ -177,7 +186,7 @@
       <!-- ✅ Assignments -->
       <div *ngIf="currentView === 'assignments'">
         <div class="event-management-panel">
-          
+
           <h2>Assignments <span *ngIf="currentClass">({{ currentClass.name }})</span></h2>
 
           <div *ngIf="currentClass; else selectClassAssign">
@@ -242,19 +251,28 @@
               <button (click)="addResource()">Add Resource</button>
             </div>
 
-            <div class="empty-state">
-              <p>Resource management feature is coming soon!</p>
-              <p>Currently resources are stored locally and will be reset on refresh.</p>
+
+            <!-- Empty state when no resources -->
+            <div class="empty-state" *ngIf="resources.length === 0">
+              <p>No resources added yet. Add a resource above to get started!</p>
             </div>
 
+            <!-- Resources Table -->
             <table class="leave-table" *ngIf="resources.length > 0">
               <thead>
-                <tr><th>Title</th><th>Link</th></tr>
+                <tr>
+                  <th>Title</th>
+                  <th>Link</th>
+                  <th>Actions</th>
+                </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let r of resources">
                   <td>{{ r.title }}</td>
-                  <td><a [href]="r.link" target="_blank">{{ r.link }}</a></td>
+                  <td><a [href]="r.link" target="_blank" rel="noopener noreferrer">{{ r.link }}</a></td>
+                  <td>
+                    <button class="delete-btn" (click)="deleteResource(r)">🗑️ Delete</button>
+                  </td>
                 </tr>
               </tbody>
             </table>

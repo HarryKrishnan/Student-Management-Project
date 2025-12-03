@@ -44,6 +44,23 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     details: '',
   };
 
+  // Assignment Details Modal
+  selectedAssignment: any = null;
+
+  showAssignmentDetails(assignment: any) {
+    this.selectedAssignment = assignment;
+  }
+
+  closeAssignmentDetails() {
+    this.selectedAssignment = null;
+  }
+
+  // Resources
+  allResources: any[] = [];
+  displayedResources: any[] = [];
+  subjects: string[] = ['All'];  // Will be populated from student's class subjects
+  selectedSubjectForResources: string = 'All';
+
   private destroy$ = new Subject<void>();
   private refreshInterval = 10000; // ✅ REAL-TIME: Refresh every 10 seconds
 
@@ -62,6 +79,13 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
           division: res.division,
           rollNo: res.id,
         };
+
+        // Load assignments for this student's class
+        if (res.className && res.division) {
+          this.loadAssignments(res.className, res.division);
+          this.loadResources(res.className, res.division);
+          this.loadClassAdvisor(res.className, res.division);
+        }
       },
       error: (err) => console.error('❌ Profile API Error:', err),
     });
@@ -77,14 +101,7 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
     this.loadStudentEvents(user.id);
 
-    // Default mock data
-    this.classAdvisor = {
-      title: 'Class Advisor',
-      name: 'Mrs. Anita Sharma',
-      email: 'anita.sharma@school.edu',
-      mobile: '9876543210',
-    };
-
+    // Initialize subject teachers (Mock for now, can be updated later)
     this.subjectTeachers = [
       { subject: 'Math', title: 'Math Teacher', name: 'Mr. Rajesh Kumar', email: 'rajesh.k@school.edu', mobile: '9876543211' },
       { subject: 'Science', title: 'Science Teacher', name: 'Ms. Priya Singh', email: 'priya.s@school.edu', mobile: '9876543212' },
@@ -92,14 +109,10 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       { subject: 'English', title: 'English Teacher', name: 'Ms. Emily White', email: 'emily.w@school.edu', mobile: '9876543214' }
     ];
 
-    this.displayedTeacherContact = this.classAdvisor;
-    // Assignment data will be loaded from backend once Assignment model is implemented
-    this.allHomeworks = [];
-
     this.filterDashboard();
     this.calculateAverageGrade();
 
-    // 🔄 REAL-TIME POLLING: Auto-refresh leave requests, events, marks, and attendance every 10 seconds
+    // 🔄 REAL-TIME POLLING: Auto-refresh leave requests, events, marks, attendance, and assignments every 10 seconds
     interval(this.refreshInterval)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -108,9 +121,57 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
         this.loadStudentEvents(user.id);
         this.loadMarks(user.id);
         this.loadAttendance(user.id);
+        // Reload assignments if we have class info
+        if (this.profile?.class && this.profile?.division) {
+          this.loadAssignments(this.profile.class, this.profile.division);
+        }
       });
   }
 
+  loadClassAdvisor(className: string, division: string) {
+    this.api.getClassByNameAndDivision(className, division).subscribe({
+      next: (classData: any) => {
+        if (classData && classData.class_teacher) {
+          // Fetch teacher details
+          this.api.getUserById(classData.class_teacher).subscribe({
+            next: (teacher: any) => {
+              this.classAdvisor = {
+                title: 'Class Advisor',
+                name: teacher.name,
+                email: teacher.email,
+                mobile: teacher.phone || 'N/A'
+              };
+              // Update display if currently showing advisor (default)
+              if (!this.selectedExam || this.selectedExam === 'All') {
+                this.displayedTeacherContact = this.classAdvisor;
+              }
+              console.log('✅ Class Advisor loaded:', this.classAdvisor);
+            },
+            error: (err) => {
+              console.error('❌ Error loading teacher details:', err);
+              this.setClassAdvisorNotAssigned();
+            }
+          });
+        } else {
+          this.setClassAdvisorNotAssigned();
+        }
+      },
+      error: (err) => {
+        console.error('❌ Error loading class details:', err);
+        this.setClassAdvisorNotAssigned();
+      }
+    });
+  }
+
+  private setClassAdvisorNotAssigned() {
+    this.classAdvisor = {
+      title: 'Class Advisor',
+      name: 'Not Assigned',
+      email: 'N/A',
+      mobile: 'N/A'
+    };
+    this.displayedTeacherContact = this.classAdvisor;
+  }
   loadAttendance(studentId: number) {
     this.api.getAttendanceByStudent(studentId).subscribe({
       next: (res: any) => {
@@ -195,6 +256,27 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
       error: (err) => {
         console.error("❌ Events load error:", err);
         this.allExams = [];
+      }
+    });
+  }
+
+  loadAssignments(className: string, division: string) {
+    this.api.getAssignmentsByClass(className, division).subscribe({
+      next: (response: any) => {
+        const assignments = Array.isArray(response) ? response : (response.results || []);
+        this.allHomeworks = assignments.map((assignment: any) => ({
+          id: assignment.id,
+          title: assignment.title,
+          subject: assignment.subject,
+          dueDate: assignment.due_date,
+          description: assignment.description || ''
+        }));
+        console.log('✅ Assignments loaded:', this.allHomeworks.length);
+        this.filterDashboard(); // Update displayed assignments
+      },
+      error: (err) => {
+        console.error('❌ Error loading assignments:', err);
+        this.allHomeworks = [];
       }
     });
   }
@@ -373,6 +455,40 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
     });
 
     console.log('✅ Chart created successfully');
+  }
+
+  loadResources(className: string, division: string) {
+    this.api.getResourcesByClass(className, division).subscribe({
+      next: (response: any) => {
+        const resources = Array.isArray(response) ? response : (response.results || []);
+        this.allResources = resources;
+
+        // Extract unique subjects for the filter
+        const subjectSet = new Set<string>(['All']);
+        resources.forEach((r: any) => {
+          if (r.subject) subjectSet.add(r.subject);
+        });
+        this.subjects = Array.from(subjectSet);
+
+        this.filterResources();
+        console.log('✅ Resources loaded:', this.allResources.length);
+      },
+      error: (err) => {
+        console.error('❌ Error loading resources:', err);
+        this.allResources = [];
+        this.displayedResources = [];
+      }
+    });
+  }
+
+  filterResources() {
+    if (this.selectedSubjectForResources === 'All') {
+      this.displayedResources = [...this.allResources];
+    } else {
+      this.displayedResources = this.allResources.filter(
+        r => r.subject === this.selectedSubjectForResources
+      );
+    }
   }
 
   ngOnDestroy() {
