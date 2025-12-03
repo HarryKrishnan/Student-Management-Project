@@ -4,10 +4,10 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from .models import User, Class, Attendance, Leave, Subject, Event, Marks
+from .models import User, Class, Attendance, Leave, Subject, Event, Marks, Assignment, Resource
 from .serializers import (
     UserSerializer, LoginSerializer, ClassSerializer,
-    AttendanceSerializer, LeaveSerializer, SubjectSerializer, EventSerializer, MarksSerializer
+    AttendanceSerializer, LeaveSerializer, SubjectSerializer, EventSerializer, MarksSerializer, AssignmentSerializer, ResourceSerializer
 )
 
 # Authentication Views
@@ -240,6 +240,68 @@ class ClassViewSet(viewsets.ModelViewSet):
                 class_name=f"{class_obj.class_number}{class_obj.division}"
             )
             
+            # Calculate Academic Overview Data
+            academic_overview = []
+            for subject in subjects:
+                # 1. Average Marks
+                subject_marks = Marks.objects.filter(
+                    class_name=class_obj.class_number,
+                    division=class_obj.division,
+                    subject=subject.name
+                )
+                avg_marks = 0
+                if subject_marks.exists():
+                    total_percentage = sum([m.percentage for m in subject_marks if m.percentage is not None])
+                    avg_marks = round(total_percentage / subject_marks.count(), 1)
+                
+                # 2. Pending Assignments (Due date >= today)
+                pending_count = Assignment.objects.filter(
+                    class_name=class_obj.class_number,
+                    division=class_obj.division,
+                    subject=subject.name,
+                    due_date__gte=date.today()
+                ).count()
+                
+                # 3. Latest Resource
+                latest_resource = Resource.objects.filter(
+                    class_name=class_obj.class_number,
+                    division=class_obj.division,
+                    subject=subject.name
+                ).order_by('-created_at').first()
+                
+                latest_resource_title = latest_resource.title if latest_resource else "No resources"
+                
+                # 4. Last Updated (Max of created_at/updated_at from all related models)
+                last_updated = "N/A"
+                dates = []
+                
+                if latest_resource:
+                    dates.append(latest_resource.created_at)
+                
+                latest_assignment = Assignment.objects.filter(
+                    class_name=class_obj.class_number,
+                    division=class_obj.division,
+                    subject=subject.name
+                ).order_by('-created_at').first()
+                if latest_assignment:
+                    dates.append(latest_assignment.created_at)
+                    
+                latest_mark = subject_marks.order_by('-updated_at').first()
+                if latest_mark:
+                    dates.append(latest_mark.updated_at)
+                    
+                if dates:
+                    max_date = max(dates)
+                    last_updated = max_date.strftime("%Y-%m-%d")
+
+                academic_overview.append({
+                    'name': subject.name,
+                    'averageMarks': avg_marks,
+                    'pendingAssignments': pending_count,
+                    'latestResource': latest_resource_title,
+                    'lastUpdated': last_updated
+                })
+            
             response_data = {
                 'class': ClassSerializer(class_obj).data,
                 'teacher': UserSerializer(teacher).data,
@@ -248,6 +310,7 @@ class ClassViewSet(viewsets.ModelViewSet):
                 'pending_leaves': LeaveSerializer(pending_leaves, many=True).data,
                 'events': EventSerializer(events, many=True).data,
                 'subjects': SubjectSerializer(subjects, many=True).data,
+                'academic_overview': academic_overview,  # Add this new field
                 'total_students': students.count(),
                 'present_today': attendance_today.filter(status='Present').count(),
                 'absent_today': attendance_today.filter(status='Absent').count(),
@@ -638,3 +701,46 @@ class MarksViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
         except Class.DoesNotExist:
             return Response({'detail': 'Class not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class AssignmentViewSet(viewsets.ModelViewSet):
+    queryset = Assignment.objects.all()
+    serializer_class = AssignmentSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        class_name = self.request.query_params.get('class_name')
+        division = self.request.query_params.get('division')
+        teacher_id = self.request.query_params.get('teacher_id')
+        
+        if class_name:
+            queryset = queryset.filter(class_name=class_name)
+        if division:
+            queryset = queryset.filter(division=division)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+            
+        return queryset.order_by('-due_date')
+
+class ResourceViewSet(viewsets.ModelViewSet):
+    queryset = Resource.objects.all()
+    serializer_class = ResourceSerializer
+    permission_classes = [AllowAny]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        class_name = self.request.query_params.get('class_name')
+        division = self.request.query_params.get('division')
+        teacher_id = self.request.query_params.get('teacher_id')
+        subject = self.request.query_params.get('subject')
+        
+        if class_name:
+            queryset = queryset.filter(class_name=class_name)
+        if division:
+            queryset = queryset.filter(division=division)
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if subject:
+            queryset = queryset.filter(subject=subject)
+            
+        return queryset.order_by('-created_at')

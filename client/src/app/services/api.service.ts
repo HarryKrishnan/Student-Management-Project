@@ -119,6 +119,19 @@ export class ApiService {
     return this.http.get(`${this.baseUrl}/classes/${id}/`, this.getHttpOptions());
   }
 
+  getClassByNameAndDivision(className: string, division: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/classes/?class_number=${className}&division=${division}`, this.getHttpOptions()).pipe(
+      map((response: any) => {
+        if (Array.isArray(response) && response.length > 0) {
+          return response[0];
+        } else if (response.results && response.results.length > 0) {
+          return response.results[0];
+        }
+        return null;
+      })
+    );
+  }
+
   getTeacherClass(teacherId: number): Observable<any> {
     return this.http.get(`${this.baseUrl}/classes/?teacherId=${teacherId}`, this.getHttpOptions()).pipe(
       map((response: any) => {
@@ -375,5 +388,27 @@ export class ApiService {
 
   deleteMarks(id: number): Observable<any> {
     return this.http.delete(`${this.baseUrl}/marks/${id}/`, this.getHttpOptions());
+  }
+
+  // ========== Resources ==========
+  getResourcesByTeacher(teacherId: number, className?: string, division?: string): Observable<any> {
+    let url = `${this.baseUrl}/resources/?teacher_id=${teacherId}`;
+    if (className) url += `&class_name=${className}`;
+    if (division) url += `&division=${division}`;
+    return this.http.get(url, this.getHttpOptions());
+  }
+
+  getResourcesByClass(className: string, division: string, subject?: string): Observable<any> {
+    let url = `${this.baseUrl}/resources/?class_name=${className}&division=${division}`;
+    if (subject) url += `&subject=${subject}`;
+    return this.http.get(url, this.getHttpOptions());
+  }
+
+  createResource(resourceData: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/resources/`, resourceData, this.getHttpOptions());
+  }
+
+  deleteResource(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/resources/${id}/`, this.getHttpOptions());
   }
 }

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Class, Attendance, Leave, Subject, Event, Marks
+from .models import User, Class, Attendance, Leave, Subject, Event, Marks, Assignment, Resource
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False)
@@ -20,6 +20,8 @@ class LoginSerializer(serializers.Serializer):
 class ClassSerializer(serializers.ModelSerializer):
     class_teacher_name = serializers.CharField(source='class_teacher.name', read_only=True, allow_null=True)
     class_teacher_subject = serializers.CharField(source='class_teacher.subject', read_only=True, allow_null=True)
+    class_teacher_email = serializers.EmailField(source='class_teacher.email', read_only=True, allow_null=True)
+    class_teacher_phone = serializers.CharField(source='class_teacher.phone', read_only=True, allow_null=True)
     
     class Meta:
         model = Class
@@ -97,3 +99,15 @@ class MarksSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'percentage', 'created_at', 'updated_at', 'student_name', 'teacher_name']
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Assignment
+        fields = '__all__'
+
+class ResourceSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source='teacher.name', read_only=True)
+    
+    class Meta:
+        model = Resource
+        fields = '__all__'
