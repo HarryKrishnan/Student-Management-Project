@@ -150,14 +150,22 @@
       <h3>
         Upcoming Assignments
       </h3>
-      <div class="assignment-list" *ngIf="displayedHomeworks.length > 0; else noHomework">
-        <div class="assignment-card" *ngFor="let hw of displayedHomeworks">
-          <div class="icon-folder">📁</div>
-          <div class="assignment-details">
-            <h4>{{ hw.title }}</h4>
-            <p>Due: <span>{{ hw.dueDate | date }}</span></p>
+            <div class="assignment-list" *ngIf="displayedHomeworks.length > 0; else noHomework">
+        <div class="assignment-card" *ngFor="let hw of displayedHomeworks" 
+             (click)="toggleAssignmentDescription(hw.id)"
+             [class.expanded]="expandedAssignmentId === hw.id">
+          <div class="assignment-header">
+            <div class="icon-folder">📁</div>
+            <div class="assignment-details">
+              <h4>{{ hw.title }}</h4>
+              <p>Due: <span>{{ hw.dueDate | date }}</span></p>
+            </div>
+            <span class="status-badge">To-Do</span>
+            <span class="expand-icon">{{ expandedAssignmentId === hw.id ? '▼' : '▶' }}</span>
           </div>
-          <span class="status-badge">To-Do</span>
+          <div class="assignment-description" *ngIf="expandedAssignmentId === hw.id && hw.description">
+            <p>{{ hw.description }}</p>
+          </div>
         </div>
       </div>
       <ng-template #noHomework>
@@ -167,20 +175,6 @@
       </ng-template>
     </div>
 
-    <!-- Teacher Contact Widget -->
-    <div class="widget teacher-contact" *ngIf="displayedTeacherContact">
-      <h3>{{ displayedTeacherContact.title }}</h3>
-      <div class="contact-card">
-        <div class="contact-icon">👨‍🏫</div>
-        <div class="contact-details">
-          <h4>{{ displayedTeacherContact.name }}</h4>
-          <p><span class="icon">✉️</span> <a [href]="'mailto:' + displayedTeacherContact.email">{{
-              displayedTeacherContact.email }}</a></p>
-          <p><span class="icon">📞</span> <a [href]="'tel:' + displayedTeacherContact.mobile">{{
-              displayedTeacherContact.mobile }}</a></p>
-        </div>
-      </div>
-    </div>
 
     <!-- Events List -->
     <div class="widget events">

@@ -306,11 +306,11 @@
           </select>
         </div>
 
-        <div *ngIf="marksData.length === 0" class="no-data-message">
-          <p>No marks uploaded by subject teachers yet.</p>
+        <div *ngIf="filteredMarksData.length === 0" class="no-data-message">
+          <p>No marks found for the selected filters.</p>
         </div>
 
-        <table class="marks-table" *ngIf="marksData.length > 0">
+        <table class="marks-table" *ngIf="filteredMarksData.length > 0">
           <thead>
             <tr>
               <th>Roll No</th>
@@ -323,7 +323,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let mark of marksData">
+            <tr *ngFor="let mark of filteredMarksData">
               <td>{{ mark.student }}</td>
               <td>{{ mark.student_name }}</td>
               <td>{{ mark.subject }}</td>

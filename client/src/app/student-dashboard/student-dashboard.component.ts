@@ -35,7 +35,7 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   attendanceChart: any;
   gradesChart: any;
   averageGrade = 0;
-  schoolNews = 'Our vision is to foster a learning environment where every student can achieve their full potential. *** Upcoming: Parent-Teacher meetings next Tuesday. ***';
+  schoolNews = 'Our vision is to foster a learning environment where every student can achieve their full potential.'
 
   leaveRequest = {
     reason: '',
@@ -47,8 +47,15 @@ export class StudentDashboardComponent implements OnInit, AfterViewInit, OnDestr
   // Assignment Details Modal
   selectedAssignment: any = null;
 
-  showAssignmentDetails(assignment: any) {
-    this.selectedAssignment = assignment;
+  // Expandable assignment descriptions
+  expandedAssignmentId: number | null = null;
+
+  toggleAssignmentDescription(assignmentId: number) {
+    if (this.expandedAssignmentId === assignmentId) {
+      this.expandedAssignmentId = null; // Collapse if already expanded
+    } else {
+      this.expandedAssignmentId = assignmentId; // Expand clicked assignment
+    }
   }
 
   closeAssignmentDetails() {

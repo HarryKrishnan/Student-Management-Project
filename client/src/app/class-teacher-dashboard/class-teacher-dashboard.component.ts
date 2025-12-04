@@ -469,6 +469,23 @@ export class ClassTeacherDashboardComponent implements OnInit, OnDestroy {
     return this.academicOverviewData.filter(s => s.name === this.subjectFilter);
   }
 
+  // Filter marks data based on selected subject and exam type
+  get filteredMarksData() {
+    let filtered = this.marksData;
+
+    // Filter by subject
+    if (this.selectedSubjectView && this.selectedSubjectView !== 'All Subjects') {
+      filtered = filtered.filter(mark => mark.subject === this.selectedSubjectView);
+    }
+
+    // Filter by exam type
+    if (this.selectedExamView) {
+      filtered = filtered.filter(mark => mark.exam_type === this.selectedExamView);
+    }
+
+    return filtered;
+  }
+
   // Subjects data is loaded from dashboard endpoint
   // No separate loadTeacherSubjects() needed
 
